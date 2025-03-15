@@ -26,6 +26,7 @@ async function post<T, B extends Record<string, unknown>>(
 	body: B,
 ): Promise<T> {
 	const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+	
 	const response = await fetch(url, {
 		method: "POST",
 		headers: {

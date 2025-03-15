@@ -4,6 +4,7 @@ import {
 	api_verify,
 } from "@/api/requests";
 import FormField from "@/components/FormField";
+import LoadingWrapper from "@/components/LoadingWrapper";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link } from "expo-router";
 import React from "react";
@@ -106,17 +107,6 @@ export default function SignIn() {
 		);
 	};
 
-	const renderLoading = () => {
-		return (
-			<View className="bg-neutral-200 rounded-lg p-8 mt-8 items-center w-full">
-				<Text className="text-2xl text-neutral-500">Loading...</Text>
-				<Text className="text-neutral-500 pt-4">
-					Please wait while your request is being processed.
-				</Text>
-			</View>
-		);
-	};
-
 	const renderVerificationInput = () => {
 		return (
 			<View className="pt-6 gap-4">
@@ -167,6 +157,7 @@ export default function SignIn() {
 						<Text className="text-white text-xl font-semibold">Send code</Text>
 					</View>
 				</TouchableHighlight>
+				
 				<Link className="text-neutral-500 text-center" href="/">
 					Go back
 				</Link>
@@ -175,26 +166,23 @@ export default function SignIn() {
 	};
 
 	const renderContent = () => {
-		if (loading) {
-			return renderLoading();
-		}
-
 		if (verifyId) {
 			return renderVerificationInput();
 		}
-
 		return renderPhoneInput();
 	};
 
 	return (
 		<SafeAreaView className="bg-neutral-100 h-full">
-			<View className="p-4">
+			<View className="p-4 relative">
 				<Text className="text-2xl text-neutral-700 font-semibold text-center">
 					Sign in using phone number.
 				</Text>
 
 				{renderErrorMessage()}
-				{renderContent()}
+				<LoadingWrapper isLoading={loading} showSpinner={true}>
+					{renderContent()}
+				</LoadingWrapper>
 			</View>
 		</SafeAreaView>
 	);
