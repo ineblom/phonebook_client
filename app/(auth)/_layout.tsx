@@ -7,12 +7,11 @@ export default function AuthLayout() {
 	return (
 		<>
 			<Stack screenOptions={{ headerShown: false }}>
-				<Stack.Screen
-					name="sign-in"
-				/>
+				<Stack.Screen name="sign-in" />
+				<Stack.Screen name="add-contacts" />
 			</Stack>
 
-			<StatusBar backgroundColor="#161622" style="light"/>
+			<StatusBar backgroundColor="#161622" style="light" />
 		</>
 	);
 }

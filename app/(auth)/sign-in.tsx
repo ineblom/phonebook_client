@@ -6,12 +6,10 @@ import {
 import FormField from "@/components/FormField";
 import LoadingWrapper from "@/components/LoadingWrapper";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import React from "react";
 import { useState } from "react";
 import {
-	Alert,
-	ScrollView,
 	Text,
 	TouchableHighlight,
 	View,
@@ -19,8 +17,10 @@ import {
 	TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SignIn() {
+	const router = useRouter();
 	const [form, setForm] = useState({
 		number: "0730922943",
 		code: "",
@@ -37,12 +37,14 @@ export default function SignIn() {
 			return;
 		}
 
-		setErrorMessage("");
-
 		setLoading(true);
 		try {
 			const response = await api_requestVerification(form.number);
 			setVerifyId(response.id);
+			
+			await AsyncStorage.setItem("phone_number", form.number);
+
+			setErrorMessage("");
 		} catch (error) {
 			setErrorMessage(
 				error instanceof Error
@@ -55,11 +57,15 @@ export default function SignIn() {
 	};
 
 	const verify = async () => {
-		setErrorMessage("");
-
 		setLoading(true);
 		try {
 			const response = await api_verify(verifyId, form.code);
+			
+			await AsyncStorage.setItem("auth_token", response.token);
+			
+			router.replace("/(auth)/add-contacts");
+
+			setErrorMessage("");
 		} catch (error) {
 			setErrorMessage(
 				error instanceof Error
@@ -72,11 +78,13 @@ export default function SignIn() {
 	};
 
 	const cancelVerification = async () => {
-		setErrorMessage("");
+		setForm({...form, code: ""});
 
 		setLoading(true);
 		try {
 			await api_cancelVerification(verifyId);
+
+			setErrorMessage("");
 		} catch (error) {
 			setErrorMessage(
 				error instanceof Error
@@ -157,7 +165,7 @@ export default function SignIn() {
 						<Text className="text-white text-xl font-semibold">Send code</Text>
 					</View>
 				</TouchableHighlight>
-				
+
 				<Link className="text-neutral-500 text-center" href="/">
 					Go back
 				</Link>
