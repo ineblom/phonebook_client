@@ -17,12 +17,12 @@ import {
 	TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {storage } from "@/utils/storage";
 
 export default function SignIn() {
 	const router = useRouter();
 	const [form, setForm] = useState({
-		number: "0730922943",
+		number: "+46730922943",
 		code: "",
 	});
 	const [errorMessage, setErrorMessage] = useState<string | undefined>(
@@ -41,8 +41,8 @@ export default function SignIn() {
 		try {
 			const response = await api_requestVerification(form.number);
 			setVerifyId(response.id);
-			
-			await AsyncStorage.setItem("phone_number", form.number);
+
+			await storage.set("phone_number", form.number);
 
 			setErrorMessage("");
 		} catch (error) {
@@ -60,9 +60,9 @@ export default function SignIn() {
 		setLoading(true);
 		try {
 			const response = await api_verify(verifyId, form.code);
-			
-			await AsyncStorage.setItem("auth_token", response.token);
-			
+
+			await storage.set("auth_token", response.token);
+
 			router.replace("/(auth)/add-contacts");
 
 			setErrorMessage("");
@@ -78,7 +78,7 @@ export default function SignIn() {
 	};
 
 	const cancelVerification = async () => {
-		setForm({...form, code: ""});
+		setForm({ ...form, code: "" });
 
 		setLoading(true);
 		try {

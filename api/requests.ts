@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { storage } from "@/utils/storage";
 
 const base_url = "http://192.168.1.149:3000";
 
@@ -36,7 +36,7 @@ async function post<T, B extends Record<string, unknown>>(
 	};
 	
 	if (requiresAuth) {
-		const token = await AsyncStorage.getItem("auth_token");
+		const token = await storage.getString("auth_token");
 		if (!token) {
 			throw new Error("Authentication required");
 		}
@@ -75,7 +75,7 @@ async function get<T>(
 	const headers: HeadersInit = {};
 	
 	if (requiresAuth) {
-		const token = await AsyncStorage.getItem("auth_token");
+		const token = await storage.getString("auth_token");
 		if (!token) {
 			throw new Error("Authentication required");
 		}
