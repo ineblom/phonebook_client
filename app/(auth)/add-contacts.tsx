@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Contacts from "expo-contacts";
 import { useEffect, useState, useCallback } from "react";
+import { addContacts, type ContactData } from "@/api/requests";
 
 export default function AddContacts() {
 	const [contacts, setContacts] = useState<Contacts.Contact[] | undefined>(
@@ -35,6 +36,7 @@ export default function AddContacts() {
 			);
 			setContacts(contactsWithPhoneNumbers);
 		}
+
 	}, []);
 
 	const requestContactsPermission = useCallback(async () => {
@@ -65,38 +67,72 @@ export default function AddContacts() {
 		updateContacts();
 	}, [updateContacts]);
 
-	const contactsList = () => {
-		return (
-			<ScrollView className="flex-1 rounded-lg">
-				{contacts ? (
-					contacts.map((contact) => (
-						<View
-							key={contact.id}
-							className="bg-white p-4 rounded-lg border border-neutral-200 mb-2"
-						>
-							<Text className="text-lg font-medium text-neutral-800">
-								{contact.name || "Unknown"}
-							</Text>
+	const handleSubmit = async () => {
+		if (!contacts) {
+			return;
+		}
 
-							<Text className="text-neutral-500 mt-1">
-								{`${contact.phoneNumbers?.[0].countryCode?.toUpperCase()} ${contact.phoneNumbers?.[0].number}`}
-							</Text>
+		const contactsData: ContactData[] = [];
+
+		for (let i = 0; i < contacts.length; i++) {
+			const contact = contacts[i];
+			const phoneNumber = contact.phoneNumbers?.[0];
+			if (phoneNumber) {
+				contactsData.push({
+					name: contact.name,
+					country_code: phoneNumber.countryCode || "",
+					number: phoneNumber.digits || "",
+				});
+			}
+		}
+
+		try {
+			const response = await addContacts(contactsData);
+			console.log(response);
+		} catch (error) {
+			console.error(error);
+		}
+	};
+
+	const renderContactsList = () => {
+		return (
+			<View className="flex-1 gap-4">
+				<ScrollView className="rounded-lg">
+					{contacts ? (
+						contacts.map((contact) => (
+							<View
+								key={contact.id}
+								className="bg-white p-4 rounded-lg border border-neutral-200 mb-2"
+							>
+								<Text className="text-lg font-medium text-neutral-800">
+									{contact.name || "Unknown"}
+								</Text>
+
+								<Text className="text-neutral-500 mt-1">
+									{`${contact.phoneNumbers?.[0].countryCode?.toUpperCase()} ${contact.phoneNumbers?.[0].number}`}
+								</Text>
+							</View>
+						))
+					) : (
+						<View className="items-center justify-center py-10">
+							<Text className="text-neutral-500">Loading contacts...</Text>
 						</View>
-					))
-				) : (
-					<View className="items-center justify-center py-10">
-						<Text className="text-neutral-500">Loading contacts...</Text>
+					)}
+				</ScrollView>
+
+				<TouchableHighlight
+					onPress={handleSubmit}
+					className="rounded-xl overflow-hidden"
+				>
+					<View className="bg-primary py-4 items-center">
+						<Text className="text-white text-xl font-semibold">Submit</Text>
 					</View>
-				)}
-			</ScrollView>
+				</TouchableHighlight>
+			</View>
 		);
 	};
 
-	const renderContent = () => {
-		if (permissionStatus === Contacts.PermissionStatus.GRANTED) {
-			return contactsList();
-		}
-
+	const renderRequestAccess = () => {
 		return (
 			<View className="flex-1 items-center justify-center">
 				<View className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200 w-full max-w-md">
@@ -120,6 +156,14 @@ export default function AddContacts() {
 		);
 	};
 
+	const renderContent = () => {
+		if (permissionStatus === Contacts.PermissionStatus.GRANTED) {
+			return renderContactsList();
+		}
+
+		return renderRequestAccess();
+	};
+
 	return (
 		<SafeAreaView className="bg-neutral-100 h-full">
 			<View className="p-4 flex-1 gap-4">
@@ -132,17 +176,6 @@ export default function AddContacts() {
 				</Text>
 
 				{renderContent()}
-
-				{permissionStatus === Contacts.PermissionStatus.GRANTED && (
-					<TouchableHighlight
-						onPress={() => {}}
-						className="rounded-xl overflow-hidden"
-					>
-						<View className="bg-primary py-4 items-center">
-							<Text className="text-white text-xl font-semibold">Submit</Text>
-						</View>
-					</TouchableHighlight>
-				)}
 			</View>
 		</SafeAreaView>
 	);

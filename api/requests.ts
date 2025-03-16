@@ -30,11 +30,11 @@ async function post<T, B extends Record<string, unknown>>(
 	requiresAuth = true,
 ): Promise<T> {
 	const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-	
+
 	const headers: HeadersInit = {
 		"Content-Type": "application/json",
 	};
-	
+
 	if (requiresAuth) {
 		const token = await storage.getString("auth_token");
 		if (!token) {
@@ -42,7 +42,7 @@ async function post<T, B extends Record<string, unknown>>(
 		}
 		headers.Authorization = `Bearer ${token}`;
 	}
-	
+
 	const response = await fetch(url, {
 		method: "POST",
 		headers,
@@ -66,14 +66,11 @@ async function post<T, B extends Record<string, unknown>>(
  * @returns The parsed JSON response
  * @throws Error with message from the API if request fails
  */
-async function get<T>(
-	endpoint: string,
-	requiresAuth = true,
-): Promise<T> {
+async function get<T>(endpoint: string, requiresAuth = true): Promise<T> {
 	const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-	
+
 	const headers: HeadersInit = {};
-	
+
 	if (requiresAuth) {
 		const token = await storage.getString("auth_token");
 		if (!token) {
@@ -81,7 +78,7 @@ async function get<T>(
 		}
 		headers.Authorization = `Bearer ${token}`;
 	}
-	
+
 	const response = await fetch(url, {
 		method: "GET",
 		headers,
@@ -144,5 +141,27 @@ export const api_cancelVerification = async (id: string) => {
 			attempt_key: id,
 		},
 		false,
+	);
+};
+
+/**
+ * Interface for contact data to be uploaded
+ */
+export interface ContactData {
+	name: string;
+	country_code: string;
+	number: string;
+}
+
+/**
+ * Upload contacts to the server
+ * @param contacts Array of contacts with name and phone number
+ * @returns Success message, may throw error
+ */
+export const addContacts = async (contacts: ContactData[]) => {
+	return post<{ message: string }, { contacts: ContactData[] }>(
+		"/api/add-contacts",
+		{ contacts },
+		true,
 	);
 };
