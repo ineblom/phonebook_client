@@ -5,62 +5,84 @@ import {
 	TouchableHighlight,
 	Linking,
 	Alert,
+	ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Contacts from "expo-contacts";
 import { useEffect, useState, useCallback } from "react";
-import { addContacts, type ContactData } from "@/api/requests";
+import { api_addContacts, type ContactData } from "@/api/requests";
+import { useRouter } from "expo-router";
+import LoadingWrapper from "@/components/LoadingWrapper";
 
 export default function AddContacts() {
+	const router = useRouter();
 	const [contacts, setContacts] = useState<Contacts.Contact[] | undefined>(
 		undefined,
 	);
 	const [permissionStatus, setPermissionStatus] =
 		useState<Contacts.PermissionStatus | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const updateContacts = useCallback(async () => {
-		const { status } = await Contacts.getPermissionsAsync();
-		setPermissionStatus(status);
+		try {
+			setIsLoading(true);
+			setError(null);
+			const { status } = await Contacts.getPermissionsAsync();
+			setPermissionStatus(status);
 
-		if (status !== Contacts.PermissionStatus.GRANTED) {
-			return;
+			if (status !== Contacts.PermissionStatus.GRANTED) {
+				setIsLoading(false);
+				return;
+			}
+
+			const { data } = await Contacts.getContactsAsync({
+				fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+			});
+
+			if (data.length > 0) {
+				const contactsWithPhoneNumbers = data.filter(
+					(contact) => contact.phoneNumbers && contact.phoneNumbers.length > 0,
+				);
+				setContacts(contactsWithPhoneNumbers);
+			}
+		} catch (err) {
+			setError("Failed to load contacts. Please try again.");
+		} finally {
+			setIsLoading(false);
 		}
-
-		const { data } = await Contacts.getContactsAsync({
-			fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
-		});
-
-		if (data.length > 0) {
-			const contactsWithPhoneNumbers = data.filter(
-				(contact) => contact.phoneNumbers && contact.phoneNumbers.length > 0,
-			);
-			setContacts(contactsWithPhoneNumbers);
-		}
-
 	}, []);
 
 	const requestContactsPermission = useCallback(async () => {
-		const { status, canAskAgain } = await Contacts.requestPermissionsAsync();
+		try {
+			setIsLoading(true);
+			setError(null);
+			const { status, canAskAgain } = await Contacts.requestPermissionsAsync();
 
-		if (status === Contacts.PermissionStatus.GRANTED) {
-			updateContacts();
-		} else if (status === Contacts.PermissionStatus.DENIED && !canAskAgain) {
-			Alert.alert(
-				"Contacts Access Required",
-				"Please enable contacts access in settings under Contacts -> Full Access",
-				[
-					{
-						text: "Cancel",
-					},
-					{
-						text: "Open Settings",
-						onPress: () => Linking.openSettings(),
-					},
-				],
-			);
+			if (status === Contacts.PermissionStatus.GRANTED) {
+				updateContacts();
+			} else if (status === Contacts.PermissionStatus.DENIED && !canAskAgain) {
+				Alert.alert(
+					"Contacts Access Required",
+					"Please enable contacts access in settings under Contacts -> Full Access",
+					[
+						{
+							text: "Cancel",
+						},
+						{
+							text: "Open Settings",
+							onPress: () => Linking.openSettings(),
+						},
+					],
+				);
+			}
+
+			setPermissionStatus(status);
+		} catch (err) {
+			setError("Failed to request permission. Please try again.");
+		} finally {
+			setIsLoading(false);
 		}
-
-		setPermissionStatus(status);
 	}, [updateContacts]);
 
 	useEffect(() => {
@@ -72,33 +94,46 @@ export default function AddContacts() {
 			return;
 		}
 
-		const contactsData: ContactData[] = [];
-
-		for (let i = 0; i < contacts.length; i++) {
-			const contact = contacts[i];
-			const phoneNumber = contact.phoneNumbers?.[0];
-			if (phoneNumber) {
-				contactsData.push({
-					name: contact.name,
-					country_code: phoneNumber.countryCode || "",
-					number: phoneNumber.digits || "",
-				});
-			}
-		}
-
 		try {
-			const response = await addContacts(contactsData);
-			console.log(response);
-		} catch (error) {
-			console.error(error);
+			setIsLoading(true);
+			setError(null);
+			const contactsData: ContactData[] = [];
+
+			for (let i = 0; i < contacts.length; i++) {
+				const contact = contacts[i];
+				const phoneNumber = contact.phoneNumbers?.[0];
+				if (phoneNumber) {
+					contactsData.push({
+						name: contact.name,
+						country_code: phoneNumber.countryCode || "",
+						number: phoneNumber.digits || "",
+					});
+				}
+			}
+
+			await api_addContacts(contactsData);
+			router.replace("/(tabs)/home");
+		} catch (err) {
+			setError("Failed to submit contacts. Please try again.");
+		} finally {
+			setIsLoading(false);
 		}
 	};
 
 	const renderContactsList = () => {
+		if (!contacts) {
+			return (
+				<View className="flex-1 items-center justify-center">
+					<ActivityIndicator size="large" color="#0000ff" />
+					<Text className="text-neutral-500 mt-4">Loading contacts...</Text>
+				</View>
+			);
+		}
+
 		return (
 			<View className="flex-1 gap-4">
 				<ScrollView className="rounded-lg">
-					{contacts ? (
+					{contacts.length > 0 ? (
 						contacts.map((contact) => (
 							<View
 								key={contact.id}
@@ -115,7 +150,7 @@ export default function AddContacts() {
 						))
 					) : (
 						<View className="items-center justify-center py-10">
-							<Text className="text-neutral-500">Loading contacts...</Text>
+							<Text className="text-neutral-500">No contacts found</Text>
 						</View>
 					)}
 				</ScrollView>
@@ -133,6 +168,15 @@ export default function AddContacts() {
 	};
 
 	const renderRequestAccess = () => {
+		if (permissionStatus === null) {
+			return (
+				<View className="flex-1 items-center justify-center">
+					<ActivityIndicator size="large" color="#0000ff" />
+					<Text className="text-neutral-500 mt-4">Checking permissions...</Text>
+				</View>
+			);
+		}
+
 		return (
 			<View className="flex-1 items-center justify-center">
 				<View className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200 w-full max-w-md">
@@ -156,6 +200,14 @@ export default function AddContacts() {
 		);
 	};
 
+	const renderError = () => {
+		return (
+			<View className="bg-red-100 p-3 rounded-lg mb-2">
+				<Text className="text-red-700 text-center">{error}</Text>
+			</View>
+		);
+	};
+
 	const renderContent = () => {
 		if (permissionStatus === Contacts.PermissionStatus.GRANTED) {
 			return renderContactsList();
@@ -175,7 +227,14 @@ export default function AddContacts() {
 					build our network.
 				</Text>
 
-				{renderContent()}
+				{error && renderError()}
+				<LoadingWrapper
+					isLoading={isLoading}
+					showSpinner={true}
+					spinnerColor="#0091ff"
+				>
+					{renderContent()}
+				</LoadingWrapper>
 			</View>
 		</SafeAreaView>
 	);

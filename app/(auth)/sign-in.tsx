@@ -101,9 +101,9 @@ export default function SignIn() {
 		if (!errorMessage) return null;
 
 		return (
-			<View className="justify-between flex-row items-center p-4 bg-red-100 rounded-xl border border-red-500 mt-4">
+			<View className="justify-between flex-row items-center p-4 bg-red-100 rounded-xl mt-4">
 				<Text className="text-lg text-red-500 flex-1">
-					ERROR: {errorMessage}
+					{errorMessage}
 				</Text>
 				<TouchableOpacity
 					onPress={() => setErrorMessage("")}

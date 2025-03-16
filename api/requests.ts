@@ -1,6 +1,6 @@
 import { storage } from "@/utils/storage";
 
-const base_url = "http://192.168.1.149:3000";
+const base_url = "http://172.20.10.3:3000";
 
 export interface VerificationResponse {
 	message: string;
@@ -158,7 +158,7 @@ export interface ContactData {
  * @param contacts Array of contacts with name and phone number
  * @returns Success message, may throw error
  */
-export const addContacts = async (contacts: ContactData[]) => {
+export const api_addContacts = async (contacts: ContactData[]) => {
 	return post<{ message: string }, { contacts: ContactData[] }>(
 		"/api/add-contacts",
 		{ contacts },

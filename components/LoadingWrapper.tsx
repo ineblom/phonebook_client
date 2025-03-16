@@ -47,6 +47,7 @@ export default function LoadingWrapper({
 const styles = StyleSheet.create({
   container: {
     position: "relative",
+    flex: 1,
   },
   contentWrapper: {
     opacity: 0.6,
