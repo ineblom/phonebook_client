@@ -1,9 +1,19 @@
+import { storage } from "@/utils/storage";
 import { useRouter } from "expo-router";
 import { View, Text, TouchableHighlight } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Index() {
 	const router = useRouter();
+
+	const signIn = () => {
+		const token = storage.getString("auth_token");
+		if (token !== undefined) {
+			router.push("/(auth)/add-contacts");
+		} else {
+			router.push("/(auth)/sign-in");
+		}
+	}
 	
 	return (
 		<SafeAreaView className="bg-neutral-100 h-full">
@@ -11,7 +21,7 @@ export default function Index() {
 				<Text className="text-4xl py-16">Welcome to Phonebook</Text>
 
 				<TouchableHighlight
-					onPress={() => router.push("/(auth)/sign-in")}
+					onPress={signIn}
 					className="w-full rounded-xl overflow-hidden"
 				>
 					<View className="bg-primary py-4 items-center">

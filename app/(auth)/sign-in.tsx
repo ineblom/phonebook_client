@@ -17,7 +17,7 @@ import {
 	TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {storage } from "@/utils/storage";
+import { storage } from "@/utils/storage";
 
 export default function SignIn() {
 	const router = useRouter();
