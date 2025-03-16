@@ -3,17 +3,17 @@ import { storage } from "@/utils/storage";
 const base_url = "http://172.20.10.3:3000";
 
 export interface VerificationResponse {
-	message: string;
-	id: string;
+  message: string;
+  id: string;
 }
 
 export interface VerifyResponse {
-	message: string;
-	token: string;
+  message: string;
+  token: string;
 }
 
 export interface ErrorResponse {
-	error: string;
+  error: string;
 }
 
 /**
@@ -25,38 +25,38 @@ export interface ErrorResponse {
  * @throws Error with message from the API if request fails
  */
 async function post<T, B extends Record<string, unknown>>(
-	endpoint: string,
-	body: B,
-	requiresAuth = true,
+  endpoint: string,
+  body: B,
+  requiresAuth = true,
 ): Promise<T> {
-	const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-	const headers: HeadersInit = {
-		"Content-Type": "application/json",
-	};
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
 
-	if (requiresAuth) {
-		const token = await storage.getString("auth_token");
-		if (!token) {
-			throw new Error("Authentication required");
-		}
-		headers.Authorization = `Bearer ${token}`;
-	}
+  if (requiresAuth) {
+    const token = await storage.getString("auth_token");
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+    headers.Authorization = `Bearer ${token}`;
+  }
 
-	const response = await fetch(url, {
-		method: "POST",
-		headers,
-		body: JSON.stringify(body),
-	});
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
 
-	const data = await response.json();
+  const data = await response.json();
 
-	if (!response.ok) {
-		const errorData = data as ErrorResponse;
-		throw new Error(errorData.error || `Failed to ${endpoint}`);
-	}
+  if (!response.ok) {
+    const errorData = data as ErrorResponse;
+    throw new Error(errorData.error || `Failed to ${endpoint}`);
+  }
 
-	return data as T;
+  return data as T;
 }
 
 /**
@@ -67,31 +67,31 @@ async function post<T, B extends Record<string, unknown>>(
  * @throws Error with message from the API if request fails
  */
 async function get<T>(endpoint: string, requiresAuth = true): Promise<T> {
-	const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const url = `${base_url}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-	const headers: HeadersInit = {};
+  const headers: HeadersInit = {};
 
-	if (requiresAuth) {
-		const token = await storage.getString("auth_token");
-		if (!token) {
-			throw new Error("Authentication required");
-		}
-		headers.Authorization = `Bearer ${token}`;
-	}
+  if (requiresAuth) {
+    const token = await storage.getString("auth_token");
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+    headers.Authorization = `Bearer ${token}`;
+  }
 
-	const response = await fetch(url, {
-		method: "GET",
-		headers,
-	});
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
 
-	const data = await response.json();
+  const data = await response.json();
 
-	if (!response.ok) {
-		const errorData = data as ErrorResponse;
-		throw new Error(errorData.error || `Failed to ${endpoint}`);
-	}
+  if (!response.ok) {
+    const errorData = data as ErrorResponse;
+    throw new Error(errorData.error || `Failed to ${endpoint}`);
+  }
 
-	return data as T;
+  return data as T;
 }
 
 /**
@@ -100,13 +100,13 @@ async function get<T>(endpoint: string, requiresAuth = true): Promise<T> {
  * @returns Parsed verification request response
  */
 export const api_requestVerification = async (
-	number: string,
+  number: string,
 ): Promise<VerificationResponse> => {
-	return post<VerificationResponse, { number: string }>(
-		"/request-verification",
-		{ number },
-		false,
-	);
+  return post<VerificationResponse, { number: string }>(
+    "/request-verification",
+    { number },
+    false,
+  );
 };
 
 /**
@@ -116,17 +116,17 @@ export const api_requestVerification = async (
  * @returns A result containing credentials, may throw error
  */
 export const api_verify = async (
-	id: string,
-	code: string,
+  id: string,
+  code: string,
 ): Promise<VerifyResponse> => {
-	return post<VerifyResponse, { attempt_key: string; code: string }>(
-		"/verify",
-		{
-			attempt_key: id,
-			code: code,
-		},
-		false,
-	);
+  return post<VerifyResponse, { attempt_key: string; code: string }>(
+    "/verify",
+    {
+      attempt_key: id,
+      code: code,
+    },
+    false,
+  );
 };
 
 /**
@@ -135,22 +135,22 @@ export const api_verify = async (
  * @returns Nothing, may throw error.
  */
 export const api_cancelVerification = async (id: string) => {
-	return post<{ message: string }, { attempt_key: string }>(
-		"/cancel-verification",
-		{
-			attempt_key: id,
-		},
-		false,
-	);
+  return post<{ message: string }, { attempt_key: string }>(
+    "/cancel-verification",
+    {
+      attempt_key: id,
+    },
+    false,
+  );
 };
 
 /**
  * Interface for contact data to be uploaded
  */
 export interface ContactData {
-	name: string;
-	country_code: string;
-	number: string;
+  name: string;
+  country_code: string;
+  number: string;
 }
 
 /**
@@ -159,9 +159,9 @@ export interface ContactData {
  * @returns Success message, may throw error
  */
 export const api_addContacts = async (contacts: ContactData[]) => {
-	return post<{ message: string }, { contacts: ContactData[] }>(
-		"/api/add-contacts",
-		{ contacts },
-		true,
-	);
+  return post<{ message: string }, { contacts: ContactData[] }>(
+    "/api/add-contacts",
+    { contacts },
+    true,
+  );
 };
