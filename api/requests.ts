@@ -165,3 +165,12 @@ export const api_addContacts = async (contacts: ContactData[]) => {
     true,
   );
 };
+
+export interface GetContact {
+	name: string;
+	user_key: string;
+}
+
+export const api_getContacts = async (userKey: string): Promise<GetContact[]> => {
+	return get<GetContact[]>(`/api/contacts?user=${userKey}`, true);
+}
