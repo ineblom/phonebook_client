@@ -112,7 +112,7 @@ export default function AddContacts() {
       }
 
       await api_addContacts(contactsData);
-      router.replace("/(tabs)/home");
+      router.replace("/(tabs)/explore");
     } catch (err) {
       setError("Failed to submit contacts. Please try again.");
     } finally {

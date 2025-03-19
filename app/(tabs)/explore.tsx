@@ -9,17 +9,17 @@ import {
   useFont,
   Skia,
 } from "@shopify/react-native-skia";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   GestureDetector,
   Gesture,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import {
-  useSharedValue,
-  useAnimatedReaction,
-} from "react-native-reanimated";
+import { useSharedValue, useAnimatedReaction } from "react-native-reanimated";
+import { jwtDecode } from "jwt-decode";
 import React from "react";
+import { storage } from "@/utils/storage";
+import { api_getContacts } from "@/api/requests";
 
 interface Node {
   x: number;
@@ -43,11 +43,8 @@ export default function Home() {
   const font = useFont(require("../../assets/fonts/SpaceMono-Regular.ttf"), 16);
 
   const [graph, setGraph] = useState<Graph>({
-    nodes: [
-      { x: 200, y: 200, label: "You", radius: 30, color: "lightblue" },
-    ],
-    edges: [
-    ],
+    nodes: [{ x: 200, y: 200, label: "You", radius: 30, color: "lightblue" }],
+    edges: [],
   });
 
   const translateX = useSharedValue(0);
@@ -97,6 +94,41 @@ export default function Home() {
 
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
+  useEffect(() => {
+    const auth_token = storage.getString("auth_token");
+    if (!auth_token) return;
+
+    const data = jwtDecode(auth_token) as { user_key?: string };
+    if (!data || !data.user_key) return;
+
+    api_getContacts(data.user_key)
+      .then((contacts) => {
+        const newNodes = contacts.map((contact, idx) => ({
+          x: Math.sin((Math.PI * 2 * idx) / contacts.length) * 500,
+          y: Math.cos((Math.PI * 2 * idx) / contacts.length) * 500,
+          label: contact.name,
+          radius: 30,
+          color: "lightblue",
+        }));
+
+        const newEdges = contacts.map((contact, idx) => ({
+          source: 0,
+          target: idx + 1,
+        }));
+
+        setGraph({
+          nodes: [
+            { x: 0, y: 0, label: "You", radius: 30, color: "lightblue" },
+            ...newNodes,
+          ],
+          edges: [...newEdges],
+        });
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
+
   const renderGraph = ({ nodes, edges }: Graph) => {
     if (!font) return null;
 
@@ -113,7 +145,7 @@ export default function Home() {
 
                 return (
                   <Line
-                    key={`edge-${edge.source}-${edge.target}`}
+                    key={`edge-${edge.source}-${edge.target}-${source.x}-${source.y}-${target.x}-${target.y}`}
                     p1={{ x: source.x, y: source.y }}
                     p2={{ x: target.x, y: target.y }}
                     color="rgba(0, 0, 0, 0.2)"
@@ -127,7 +159,7 @@ export default function Home() {
                 const width = font.measureText(node.label).width;
 
                 return (
-                  <React.Fragment key={`node-group-${node.label}`}>
+                  <React.Fragment key={`group-${node.label}-${node.x}-${node.y}`}>
                     <Circle
                       key={`node-circle-${node.label}`}
                       cx={node.x}
@@ -156,7 +188,6 @@ export default function Home() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView className="bg-neutral-100 h-full">
         <View className="flex-1">
-          <Text className="text-2xl font-semibold px-4">Network</Text>
           {renderGraph(graph)}
         </View>
       </SafeAreaView>
