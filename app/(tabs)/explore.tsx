@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Canvas,
@@ -159,7 +159,9 @@ export default function Home() {
                 const width = font.measureText(node.label).width;
 
                 return (
-                  <React.Fragment key={`group-${node.label}-${node.x}-${node.y}`}>
+                  <React.Fragment
+                    key={`group-${node.label}-${node.x}-${node.y}`}
+                  >
                     <Circle
                       key={`node-circle-${node.label}`}
                       cx={node.x}
@@ -187,9 +189,7 @@ export default function Home() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView className="bg-neutral-100 h-full">
-        <View className="flex-1">
-          {renderGraph(graph)}
-        </View>
+        <View className="flex-1">{renderGraph(graph)}</View>
       </SafeAreaView>
     </GestureHandlerRootView>
   );
