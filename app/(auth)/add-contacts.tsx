@@ -28,6 +28,7 @@ export default function AddContacts() {
     try {
       setIsLoading(true);
       setError(null);
+
       const { status } = await Contacts.getPermissionsAsync();
       setPermissionStatus(status);
 
@@ -57,6 +58,7 @@ export default function AddContacts() {
     try {
       setIsLoading(true);
       setError(null);
+
       const { status, canAskAgain } = await Contacts.requestPermissionsAsync();
 
       if (status === Contacts.PermissionStatus.GRANTED) {
@@ -94,30 +96,32 @@ export default function AddContacts() {
       return;
     }
 
-    try {
-      setIsLoading(true);
-      setError(null);
-      const contactsData: ContactData[] = [];
+    setIsLoading(true);
+    setError(null);
+    const contactsData: ContactData[] = [];
 
-      for (let i = 0; i < contacts.length; i++) {
-        const contact = contacts[i];
-        const phoneNumber = contact.phoneNumbers?.[0];
-        if (phoneNumber) {
-          contactsData.push({
-            name: contact.name,
-            country_code: phoneNumber.countryCode || "",
-            number: phoneNumber.digits || "",
-          });
-        }
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+      const phoneNumber = contact.phoneNumbers?.[0];
+      if (phoneNumber) {
+        contactsData.push({
+          name: contact.name,
+          country_code: phoneNumber.countryCode || "",
+          number: phoneNumber.digits || "",
+        });
       }
-
-      await api_addContacts(contactsData);
-      router.replace("/(tabs)/explore");
-    } catch (err) {
-      setError("Failed to submit contacts. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
+
+    const { error } = await api_addContacts(contactsData);
+    if (error) {
+      setError(error instanceof Error ? error.message : "Failed to add contacts");
+      setIsLoading(false);
+      return;
+    }
+
+    router.replace("/(tabs)/explore");
+
+    setIsLoading(false);
   };
 
   const renderContactsList = () => {

@@ -2,6 +2,29 @@ import { storage } from "@/utils/storage";
 
 const base_url = "http://172.20.10.3:3000";
 
+type Success<T> = {
+  data: T;
+  error: null;
+};
+
+type Failure<E> = {
+  data: null;
+  error: E;
+};
+
+type Result<T, E = Error> = Success<T> | Failure<E>;
+
+export async function tryCatch<T, E = Error>(
+  promise: Promise<T>,
+): Promise<Result<T, E>> {
+  try {
+    const data = await promise;
+    return { data, error: null };
+  } catch (error) {
+    return { data: null, error: error as E };
+  }
+}
+
 export interface VerificationResponse {
   message: string;
   id: string;
@@ -97,15 +120,17 @@ async function get<T>(endpoint: string, requiresAuth = true): Promise<T> {
 /**
  * Sends a verification request, this will send a code to the users phone.
  * @param number User phone number
- * @returns Parsed verification request response
+ * @returns Result containing verification response or error
  */
 export const api_requestVerification = async (
   number: string,
-): Promise<VerificationResponse> => {
-  return post<VerificationResponse, { number: string }>(
-    "/request-verification",
-    { number },
-    false,
+): Promise<Result<VerificationResponse, Error>> => {
+  return tryCatch(
+    post<VerificationResponse, { number: string }>(
+      "/request-verification",
+      { number },
+      false,
+    )
   );
 };
 
@@ -113,34 +138,38 @@ export const api_requestVerification = async (
  * Verify a user verification attempt
  * @param id Verification attempt key
  * @param code User entered code
- * @returns A result containing credentials, may throw error
+ * @returns A result containing credentials or error
  */
 export const api_verify = async (
   id: string,
   code: string,
-): Promise<VerifyResponse> => {
-  return post<VerifyResponse, { attempt_key: string; code: string }>(
-    "/verify",
-    {
-      attempt_key: id,
-      code: code,
-    },
-    false,
+): Promise<Result<VerifyResponse, Error>> => {
+  return tryCatch(
+    post<VerifyResponse, { attempt_key: string; code: string }>(
+      "/verify",
+      {
+        attempt_key: id,
+        code: code,
+      },
+      false,
+    )
   );
 };
 
 /**
  * Cancel ongoing verification requests. Makes verifying impossible.
  * @param id Verification attempt key
- * @returns Nothing, may throw error.
+ * @returns Result with success message or error
  */
-export const api_cancelVerification = async (id: string) => {
-  return post<{ message: string }, { attempt_key: string }>(
-    "/cancel-verification",
-    {
-      attempt_key: id,
-    },
-    false,
+export const api_cancelVerification = async (id: string): Promise<Result<{ message: string }, Error>> => {
+  return tryCatch(
+    post<{ message: string }, { attempt_key: string }>(
+      "/cancel-verification",
+      {
+        attempt_key: id,
+      },
+      false,
+    )
   );
 };
 
@@ -156,13 +185,15 @@ export interface ContactData {
 /**
  * Upload contacts to the server
  * @param contacts Array of contacts with name and phone number
- * @returns Success message, may throw error
+ * @returns Result with success message or error
  */
-export const api_addContacts = async (contacts: ContactData[]) => {
-  return post<{ message: string }, { contacts: ContactData[] }>(
-    "/api/add-contacts",
-    { contacts },
-    true,
+export const api_addContacts = async (contacts: ContactData[]): Promise<Result<{ message: string }, Error>> => {
+  return tryCatch(
+    post<{ message: string }, { contacts: ContactData[] }>(
+      "/api/add-contacts",
+      { contacts },
+      true,
+    )
   );
 };
 
@@ -171,6 +202,13 @@ export interface GetContact {
 	user_key: string;
 }
 
-export const api_getContacts = async (userKey: string): Promise<GetContact[]> => {
-	return get<GetContact[]>(`/api/contacts?user=${userKey}`, true);
+/**
+ * Get contacts from the server
+ * @param userKey The user key to get contacts for
+ * @returns Result with contacts array or error
+ */
+export const api_getContacts = async (userKey: string): Promise<Result<GetContact[], Error>> => {
+	return tryCatch(
+    get<GetContact[]>(`/api/contacts?user=${userKey}`, true)
+  );
 }

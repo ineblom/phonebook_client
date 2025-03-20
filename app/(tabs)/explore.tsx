@@ -95,38 +95,38 @@ export default function Home() {
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
   useEffect(() => {
-    const auth_token = storage.getString("auth_token");
-    if (!auth_token) return;
+    (async () => {
+      const auth_token = storage.getString("auth_token");
+      if (!auth_token) return;
 
-    const data = jwtDecode(auth_token) as { user_key?: string };
-    if (!data || !data.user_key) return;
+      const jwt = jwtDecode(auth_token) as { user_key?: string };
+      if (!jwt || !jwt.user_key) return;
 
-    api_getContacts(data.user_key)
-      .then((contacts) => {
-        const newNodes = contacts.map((contact, idx) => ({
-          x: Math.sin((Math.PI * 2 * idx) / contacts.length) * 500,
-          y: Math.cos((Math.PI * 2 * idx) / contacts.length) * 500,
-          label: contact.name,
-          radius: 30,
-          color: "lightblue",
-        }));
+      const { data: contacts, error } = await api_getContacts(jwt.user_key);
+      if (error) return;
 
-        const newEdges = contacts.map((contact, idx) => ({
-          source: 0,
-          target: idx + 1,
-        }));
+      const distance = 600;
+      const newNodes = contacts.map((contact, idx) => ({
+        x: Math.sin((Math.PI * 2 * idx) / contacts.length) * distance,
+        y: Math.cos((Math.PI * 2 * idx) / contacts.length) * distance,
+        label: contact.name,
+        radius: 30,
+        color: "lightblue",
+      }));
 
-        setGraph({
-          nodes: [
-            { x: 0, y: 0, label: "You", radius: 30, color: "lightblue" },
-            ...newNodes,
-          ],
-          edges: [...newEdges],
-        });
-      })
-      .catch((error) => {
-        console.error(error);
+      const newEdges = contacts.map((contact, idx) => ({
+        source: 0,
+        target: idx + 1,
+      }));
+
+      setGraph({
+        nodes: [
+          { x: 0, y: 0, label: "You", radius: 30, color: "lightblue" },
+          ...newNodes,
+        ],
+        edges: [...newEdges],
       });
+    })();
   }, []);
 
   const renderGraph = ({ nodes, edges }: Graph) => {

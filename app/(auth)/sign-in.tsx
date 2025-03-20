@@ -38,63 +38,61 @@ export default function SignIn() {
     }
 
     setLoading(true);
-    try {
-      const response = await api_requestVerification(form.number);
-      setVerifyId(response.id);
 
-      await storage.set("phone_number", form.number);
-
-      setErrorMessage("");
-    } catch (error) {
+    const { data: response, error } = await api_requestVerification(
+      form.number,
+    );
+    if (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
           : "Failed to request verification",
       );
-    } finally {
       setLoading(false);
+      return;
     }
+
+    setVerifyId(response.id);
+    await storage.set("phone_number", form.number);
+
+    setErrorMessage("");
+    setLoading(false);
   };
 
   const verify = async () => {
     setLoading(true);
-    try {
-      const response = await api_verify(verifyId, form.code);
-
-      await storage.set("auth_token", response.token);
-
-      router.replace("/(auth)/add-contacts");
-
-      setErrorMessage("");
-    } catch (error) {
+    const { data: response, error } = await api_verify(verifyId, form.code);
+    if (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to request verification",
+        error instanceof Error ? error.message : "Failed to request verification",
       );
-    } finally {
       setLoading(false);
+      return;
     }
+
+    await storage.set("auth_token", response.token);
+    router.replace("/(auth)/add-contacts");
+
+    setErrorMessage("");
+    setLoading(false);
   };
 
   const cancelVerification = async () => {
     setForm({ ...form, code: "" });
 
     setLoading(true);
-    try {
-      await api_cancelVerification(verifyId);
-
-      setErrorMessage("");
-    } catch (error) {
+    const { error } = await api_cancelVerification(verifyId);
+    if (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to request verification",
+        error instanceof Error ? error.message : "Failed to cancel verification",
       );
-    } finally {
       setLoading(false);
-      setVerifyId("");
+      return;
     }
+
+    setErrorMessage("");
+    setVerifyId("");
+    setLoading(false);
   };
 
   const renderErrorMessage = () => {
