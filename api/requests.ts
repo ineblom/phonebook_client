@@ -1,6 +1,6 @@
 import { storage } from "@/utils/storage";
 
-const base_url = "http://172.20.10.3:3000";
+const base_url = "http://192.168.1.149:3000";
 
 type Success<T> = {
   data: T;

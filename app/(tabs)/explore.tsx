@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Canvas,
@@ -9,7 +9,7 @@ import {
   useFont,
   Skia,
 } from "@shopify/react-native-skia";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   GestureDetector,
   Gesture,
@@ -21,12 +21,13 @@ import React from "react";
 import { storage } from "@/utils/storage";
 import { api_getContacts } from "@/api/requests";
 
+const RADIUS = 30;
+
 interface Node {
   x: number;
   y: number;
   label: string;
-  radius: number;
-  color: string;
+  user_key: string;
 }
 
 interface Edge {
@@ -41,11 +42,15 @@ interface Graph {
 
 export default function Home() {
   const font = useFont(require("../../assets/fonts/SpaceMono-Regular.ttf"), 16);
+  const { width, height } = useWindowDimensions();
 
   const [graph, setGraph] = useState<Graph>({
-    nodes: [{ x: 200, y: 200, label: "You", radius: 30, color: "lightblue" }],
+    nodes: [],
     edges: [],
   });
+
+  const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
+  const [unexploredNodes, setUnexploredNodes] = useState<Set<string>>(new Set());
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -65,6 +70,30 @@ export default function Home() {
       skiaMatrix.value = matrix;
     },
   );
+
+  const checkNodesInView = () => {
+    const left = translateX.value;
+    const top = translateY.value;
+    const right = left + width;
+    const bottom = top + height;
+    const currentVisibleNodes = new Set<string>();
+
+    for (let i = 0; i < graph.nodes.length; i++) {
+      const node = graph.nodes[i];
+      const nodeX = node.x * scale.value + translateX.value;
+      const nodeY = node.y * scale.value + translateY.value;
+
+      // Check if node is in view
+      if (
+        nodeX + RADIUS >= left &&
+        nodeX - RADIUS <= right &&
+        nodeY + RADIUS >= top &&
+        nodeY - RADIUS <= bottom
+      ) {
+        currentVisibleNodes.add(node.user_key);
+      }
+    }
+  };
 
   const panGesture = Gesture.Pan().onChange((e) => {
     "worklet";
@@ -94,11 +123,10 @@ export default function Home() {
 
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  useEffect(() => {
+  /*useEffect(() => {
     (async () => {
       const auth_token = storage.getString("auth_token");
       if (!auth_token) return;
-
       const jwt = jwtDecode(auth_token) as { user_key?: string };
       if (!jwt || !jwt.user_key) return;
 
@@ -110,8 +138,8 @@ export default function Home() {
         x: Math.sin((Math.PI * 2 * idx) / contacts.length) * distance,
         y: Math.cos((Math.PI * 2 * idx) / contacts.length) * distance,
         label: contact.name,
-        radius: 30,
-        color: "lightblue",
+        user_key: contact.user_key,
+        explored: false,
       }));
 
       const newEdges = contacts.map((contact, idx) => ({
@@ -121,12 +149,33 @@ export default function Home() {
 
       setGraph({
         nodes: [
-          { x: 0, y: 0, label: "You", radius: 30, color: "lightblue" },
+          { x: 0, y: 0, label: "You", user_key: jwt.user_key, explored: true },
           ...newNodes,
         ],
         edges: [...newEdges],
       });
+      
+      // Check nodes in view after initial load
+      setTimeout(checkNodesInView, 500);
     })();
+  }, []);*/
+
+  // Check for nodes in view periodically
+  useEffect(() => {
+    const auth_token = storage.getString("auth_token");
+    if (!auth_token) return;
+    const jwt = jwtDecode(auth_token) as { user_key?: string };
+    if (!jwt || !jwt.user_key) return;
+
+    setGraph({
+      nodes: [
+        { x: 0, y: 0, label: "You", user_key: jwt.user_key },
+      ],
+      edges: [],
+    });
+
+    // const interval = setInterval(checkNodesInView, 500);
+    // return () => clearInterval(interval);
   }, []);
 
   const renderGraph = ({ nodes, edges }: Graph) => {
@@ -155,24 +204,25 @@ export default function Home() {
                 );
               })}
 
-              {nodes.map((node) => {
+              {nodes.map((node, index) => {
                 const width = font.measureText(node.label).width;
+                const nodeColor = "lightblue";
 
                 return (
                   <React.Fragment
-                    key={`group-${node.label}-${node.x}-${node.y}`}
+                    key={`group-${node.user_key}-${node.x}-${node.y}`}
                   >
                     <Circle
-                      key={`node-circle-${node.label}`}
+                      key={`node-circle-${node.user_key}`}
                       cx={node.x}
                       cy={node.y}
-                      r={node.radius}
-                      color={node.color}
+                      r={RADIUS}
+                      color={nodeColor}
                     />
                     <SkText
-                      key={`node-text-${node.label}`}
+                      key={`node-text-${node.user_key}`}
                       x={node.x - width / 2}
-                      y={node.y + node.radius + 16}
+                      y={node.y + RADIUS + 16}
                       text={node.label}
                       font={font}
                     />
