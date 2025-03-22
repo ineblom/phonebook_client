@@ -15,7 +15,11 @@ import {
   Gesture,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { useSharedValue, useAnimatedReaction } from "react-native-reanimated";
+import {
+  useSharedValue,
+  useDerivedValue,
+  runOnJS,
+} from "react-native-reanimated";
 import { jwtDecode } from "jwt-decode";
 import React from "react";
 import { storage } from "@/utils/storage";
@@ -49,25 +53,22 @@ export default function Home() {
     edges: [],
   });
 
-  const translateX = useSharedValue(-width / 2);
-  const translateY = useSharedValue(-height / 2);
+  const translateX = useSharedValue(width / 2);
+  const translateY = useSharedValue(height / 2);
   const scale = useSharedValue(1);
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
 
-  const skiaMatrix = useSharedValue(Skia.Matrix());
+  // Define the transform at component level
+  const transform = useDerivedValue(() => {
+    return [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value }
+    ];
+  });
 
-  useAnimatedReaction(
-    () => [translateX.value, translateY.value, scale.value],
-    ([x, y, s]) => {
-      const matrix = Skia.Matrix();
-      matrix.translate(x, y);
-      matrix.scale(s, s);
-      skiaMatrix.value = matrix;
-    },
-  );
-
-  const checkNodesInView = () => {
+  const checkNodesInView = useCallback(() => {
     const left = translateX.value;
     const top = translateY.value;
     const right = left + width;
@@ -88,7 +89,7 @@ export default function Home() {
         currentVisibleNodes.add(node.user_key);
       }
     }
-  };
+  }, [graph.nodes, translateX, translateY, scale, width, height]);
 
   const panGesture = Gesture.Pan().onChange((e) => {
     translateX.value += e.changeX;
@@ -164,9 +165,6 @@ export default function Home() {
       ],
       edges: [],
     });
-
-    // const interval = setInterval(checkNodesInView, 500);
-    // return () => clearInterval(interval);
   }, []);
 
   const renderGraph = ({ nodes, edges }: Graph) => {
@@ -176,7 +174,7 @@ export default function Home() {
       <GestureDetector gesture={composedGesture}>
         <View className="w-full h-full">
           <Canvas style={{ flex: 1 }}>
-            <Group matrix={skiaMatrix}>
+            <Group transform={transform}>
               {edges.map((edge) => {
                 const source = nodes[edge.source];
                 const target = nodes[edge.target];
