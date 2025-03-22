@@ -18,7 +18,6 @@ import {
 import {
   useSharedValue,
   useDerivedValue,
-  runOnJS,
 } from "react-native-reanimated";
 import { jwtDecode } from "jwt-decode";
 import React from "react";
@@ -115,43 +114,6 @@ export default function Home() {
     });
 
   const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
-
-  /*useEffect(() => {
-    (async () => {
-      const auth_token = storage.getString("auth_token");
-      if (!auth_token) return;
-      const jwt = jwtDecode(auth_token) as { user_key?: string };
-      if (!jwt || !jwt.user_key) return;
-
-      const { data: contacts, error } = await api_getContacts(jwt.user_key);
-      if (error) return;
-
-      const distance = 600;
-      const newNodes = contacts.map((contact, idx) => ({
-        x: Math.sin((Math.PI * 2 * idx) / contacts.length) * distance,
-        y: Math.cos((Math.PI * 2 * idx) / contacts.length) * distance,
-        label: contact.name,
-        user_key: contact.user_key,
-        explored: false,
-      }));
-
-      const newEdges = contacts.map((contact, idx) => ({
-        source: 0,
-        target: idx + 1,
-      }));
-
-      setGraph({
-        nodes: [
-          { x: 0, y: 0, label: "You", user_key: jwt.user_key, explored: true },
-          ...newNodes,
-        ],
-        edges: [...newEdges],
-      });
-      
-      // Check nodes in view after initial load
-      setTimeout(checkNodesInView, 500);
-    })();
-  }, []);*/
 
   useEffect(() => {
     const auth_token = storage.getString("auth_token");
