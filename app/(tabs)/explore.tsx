@@ -49,11 +49,8 @@ export default function Home() {
     edges: [],
   });
 
-  const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
-  const [unexploredNodes, setUnexploredNodes] = useState<Set<string>>(new Set());
-
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
+  const translateX = useSharedValue(-width / 2);
+  const translateY = useSharedValue(-height / 2);
   const scale = useSharedValue(1);
   const focalX = useSharedValue(0);
   const focalY = useSharedValue(0);
@@ -63,7 +60,6 @@ export default function Home() {
   useAnimatedReaction(
     () => [translateX.value, translateY.value, scale.value],
     ([x, y, s]) => {
-      "worklet";
       const matrix = Skia.Matrix();
       matrix.translate(x, y);
       matrix.scale(s, s);
@@ -83,7 +79,6 @@ export default function Home() {
       const nodeX = node.x * scale.value + translateX.value;
       const nodeY = node.y * scale.value + translateY.value;
 
-      // Check if node is in view
       if (
         nodeX + RADIUS >= left &&
         nodeX - RADIUS <= right &&
@@ -96,19 +91,16 @@ export default function Home() {
   };
 
   const panGesture = Gesture.Pan().onChange((e) => {
-    "worklet";
     translateX.value += e.changeX;
     translateY.value += e.changeY;
   });
 
   const pinchGesture = Gesture.Pinch()
     .onStart((e) => {
-      "worklet";
       focalX.value = e.focalX;
       focalY.value = e.focalY;
     })
     .onChange((e) => {
-      "worklet";
       const contentFocalX = (focalX.value - translateX.value) / scale.value;
       const contentFocalY = (focalY.value - translateY.value) / scale.value;
 
@@ -160,7 +152,6 @@ export default function Home() {
     })();
   }, []);*/
 
-  // Check for nodes in view periodically
   useEffect(() => {
     const auth_token = storage.getString("auth_token");
     if (!auth_token) return;
