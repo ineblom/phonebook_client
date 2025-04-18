@@ -25,6 +25,23 @@ interface Graph {
   edges: Edge[];
 }
 
+function ortho(left: number, right: number, bottom: number, top: number) {
+  "worklet";
+  // biome-ignore format: matrix
+  return new Float32Array([
+    2 / (right - left), 0, 0, 0,
+    0, 2 / (top - bottom), 0, 0,
+    0, 0, -1, 0,
+    (left + right) / (left - right), (top + bottom) / (bottom - top), 0, 1,
+  ]);
+}
+
+function translate(x: number, y: number) {
+  "worklet";
+  // biome-ignore format: matrix
+  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, 0, 1]);
+}
+
 function run(gl: ExpoWebGLRenderingContext) {
   "worklet";
 
@@ -39,15 +56,27 @@ function run(gl: ExpoWebGLRenderingContext) {
   gl.shaderSource(
     vert,
     `
-    uniform float u_time;
+    precision mediump float;
+
+    attribute vec2 a_position;
+
+    uniform mat4 u_projection;
+    uniform mat4 u_view;
 
     void main(void) {
-      gl_Position = vec4(sin(u_time)*0.5, cos(u_time)*0.5, 0.0, 1.0);
-      gl_PointSize = 150.0;
+      gl_Position = u_projection * u_view * vec4(a_position, 0.0, 1.0);
     }
     `,
   );
   gl.compileShader(vert);
+
+  if (!gl.getShaderParameter(vert, gl.COMPILE_STATUS)) {
+    console.error(
+      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(vert)}`,
+    );
+    gl.deleteShader(vert);
+    return;
+  }
 
   const frag = gl.createShader(gl.FRAGMENT_SHADER);
   if (!frag) {
@@ -58,28 +87,77 @@ function run(gl: ExpoWebGLRenderingContext) {
     frag,
     `
     void main(void) {
-      gl_FragColor = vec4(0.3, 1.0, 0.5, 1.0);
+      gl_FragColor = vec4(0.188, 0.871, 0.718, 1.0);
     }
     `,
   );
   gl.compileShader(frag);
 
+  if (!gl.getShaderParameter(frag, gl.COMPILE_STATUS)) {
+    console.error(
+      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(frag)}`,
+    );
+    gl.deleteShader(frag);
+    return;
+  }
+
   const program = gl.createProgram();
   gl.attachShader(program, vert);
   gl.attachShader(program, frag);
   gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(
+      `Unable to initialize the shader program: ${gl.getProgramInfoLog(program)}`,
+    );
+    gl.deleteProgram(program);
+    return;
+  }
+
   gl.useProgram(program);
 
-  const timeLocation = gl.getUniformLocation(program, "u_time");
-  gl.uniform1f(timeLocation, 0);
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+
+  const circle_vertices = [];
+  for (let i = 0; i < 360; i += 5) {
+    const angle = (i / 180) * Math.PI;
+    const x = Math.cos(angle) * 0.5;
+    const y = Math.sin(angle) * 0.5;
+    circle_vertices.push(x, y);
+  }
+
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array(circle_vertices),
+    gl.STATIC_DRAW,
+  );
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+  const projection = ortho(-1, 1, -1 / aspect, 1 / aspect);
+
+  const projectionLocation = gl.getUniformLocation(program, "u_projection");
+  const viewLocation = gl.getUniformLocation(program, "u_view");
+  gl.uniformMatrix4fv(projectionLocation, false, projection);
+
+  const camera = { x: 0, y: 0 };
 
   const render = (time_ms: number) => {
     const time = time_ms / 1000;
 
-    gl.uniform1f(timeLocation, time);
+    camera.x = Math.sin(time);
 
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.drawArrays(gl.POINTS, 0, 1);
+
+    const view = translate(-camera.x, -camera.y);
+    gl.uniformMatrix4fv(viewLocation, false, view);
+
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2);
 
     gl.flush();
     gl.endFrameEXP();
@@ -87,8 +165,6 @@ function run(gl: ExpoWebGLRenderingContext) {
     requestAnimationFrame(render);
   };
   render(0);
-
-  console.log("Context created");
 }
 
 function onContextCreate(gl: ExpoWebGLRenderingContext) {
