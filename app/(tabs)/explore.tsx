@@ -1,30 +1,12 @@
-import { View, useWindowDimensions } from "react-native";
+import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useEffect, useState } from "react";
 import {
-  Canvas,
-  Circle,
-  Group,
-  Line,
-  Text as SkText,
-  useFont,
-  Skia,
-} from "@shopify/react-native-skia";
-import { useEffect, useState, useRef, useCallback } from "react";
-import {
-  GestureDetector,
-  Gesture,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import {
-  useSharedValue,
-  useDerivedValue,
-} from "react-native-reanimated";
-import { jwtDecode } from "jwt-decode";
-import React from "react";
-import { storage } from "@/utils/storage";
-import { api_getContacts } from "@/api/requests";
-
-const RADIUS = 30;
+  type ExpoWebGLRenderingContext,
+  getWorkletContext,
+  GLView,
+} from "expo-gl";
+import { runOnUI } from "react-native-reanimated";
 
 interface Node {
   x: number;
@@ -43,155 +25,98 @@ interface Graph {
   edges: Edge[];
 }
 
-export default function Home() {
-  const font = useFont(require("../../assets/fonts/SpaceMono-Regular.ttf"), 16);
-  const { width, height } = useWindowDimensions();
+function run(gl: ExpoWebGLRenderingContext) {
+  "worklet";
 
-  const [graph, setGraph] = useState<Graph>({
-    nodes: [],
-    edges: [],
-  });
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clearColor(0.96, 0.96, 0.96, 1);
 
-  const translateX = useSharedValue(width / 2);
-  const translateY = useSharedValue(height / 2);
-  const scale = useSharedValue(1);
-  const focalX = useSharedValue(0);
-  const focalY = useSharedValue(0);
+  const vert = gl.createShader(gl.VERTEX_SHADER);
+  if (!vert) {
+    console.error("Failed to create vertex shader");
+    return;
+  }
+  gl.shaderSource(
+    vert,
+    `
+    uniform float u_time;
 
-  // Define the transform at component level
-  const transform = useDerivedValue(() => {
-    return [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value }
-    ];
-  });
-
-  const checkNodesInView = useCallback(() => {
-    const left = translateX.value;
-    const top = translateY.value;
-    const right = left + width;
-    const bottom = top + height;
-    const currentVisibleNodes = new Set<string>();
-
-    for (let i = 0; i < graph.nodes.length; i++) {
-      const node = graph.nodes[i];
-      const nodeX = node.x * scale.value + translateX.value;
-      const nodeY = node.y * scale.value + translateY.value;
-
-      if (
-        nodeX + RADIUS >= left &&
-        nodeX - RADIUS <= right &&
-        nodeY + RADIUS >= top &&
-        nodeY - RADIUS <= bottom
-      ) {
-        currentVisibleNodes.add(node.user_key);
-      }
+    void main(void) {
+      gl_Position = vec4(sin(u_time)*0.5, cos(u_time)*0.5, 0.0, 1.0);
+      gl_PointSize = 150.0;
     }
-  }, [graph.nodes, translateX, translateY, scale, width, height]);
+    `,
+  );
+  gl.compileShader(vert);
 
-  const panGesture = Gesture.Pan().onChange((e) => {
-    translateX.value += e.changeX;
-    translateY.value += e.changeY;
-  });
+  const frag = gl.createShader(gl.FRAGMENT_SHADER);
+  if (!frag) {
+    console.error("Failed to create fragment shader");
+    return;
+  }
+  gl.shaderSource(
+    frag,
+    `
+    void main(void) {
+      gl_FragColor = vec4(0.3, 1.0, 0.5, 1.0);
+    }
+    `,
+  );
+  gl.compileShader(frag);
 
-  const pinchGesture = Gesture.Pinch()
-    .onStart((e) => {
-      focalX.value = e.focalX;
-      focalY.value = e.focalY;
-    })
-    .onChange((e) => {
-      const contentFocalX = (focalX.value - translateX.value) / scale.value;
-      const contentFocalY = (focalY.value - translateY.value) / scale.value;
+  const program = gl.createProgram();
+  gl.attachShader(program, vert);
+  gl.attachShader(program, frag);
+  gl.linkProgram(program);
+  gl.useProgram(program);
 
-      const newScale = scale.value * e.scaleChange;
-      const clampedScale = Math.min(Math.max(0.5, newScale), 5);
+  const timeLocation = gl.getUniformLocation(program, "u_time");
+  gl.uniform1f(timeLocation, 0);
 
-      translateX.value = focalX.value - contentFocalX * clampedScale;
-      translateY.value = focalY.value - contentFocalY * clampedScale;
+  const render = (time_ms: number) => {
+    const time = time_ms / 1000;
 
-      scale.value = clampedScale;
-    });
+    gl.uniform1f(timeLocation, time);
 
-  const composedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.POINTS, 0, 1);
 
+    gl.flush();
+    gl.endFrameEXP();
+
+    requestAnimationFrame(render);
+  };
+  render(0);
+
+  console.log("Context created");
+}
+
+function onContextCreate(gl: ExpoWebGLRenderingContext) {
+  runOnUI((contextId: number) => {
+    "worklet";
+    const gl = getWorkletContext(contextId);
+    if (!gl) {
+      console.error("Failed to get context");
+      return;
+    }
+    run(gl);
+  })(gl.contextId);
+}
+
+export default function Home() {
+  const [key, setKey] = useState<number>(0);
   useEffect(() => {
-    const auth_token = storage.getString("auth_token");
-    if (!auth_token) return;
-    const jwt = jwtDecode(auth_token) as { user_key?: string };
-    if (!jwt || !jwt.user_key) return;
-
-    setGraph({
-      nodes: [
-        { x: 0, y: 0, label: "You", user_key: jwt.user_key },
-      ],
-      edges: [],
-    });
+    setKey((prevKey) => prevKey + 1);
   }, []);
 
-  const renderGraph = ({ nodes, edges }: Graph) => {
-    if (!font) return null;
-
-    return (
-      <GestureDetector gesture={composedGesture}>
-        <View className="w-full h-full">
-          <Canvas style={{ flex: 1 }}>
-            <Group transform={transform}>
-              {edges.map((edge) => {
-                const source = nodes[edge.source];
-                const target = nodes[edge.target];
-
-                if (!source || !target) return null;
-
-                return (
-                  <Line
-                    key={`edge-${edge.source}-${edge.target}-${source.x}-${source.y}-${target.x}-${target.y}`}
-                    p1={{ x: source.x, y: source.y }}
-                    p2={{ x: target.x, y: target.y }}
-                    color="rgba(0, 0, 0, 0.2)"
-                    style="stroke"
-                    strokeWidth={2}
-                  />
-                );
-              })}
-
-              {nodes.map((node, index) => {
-                const width = font.measureText(node.label).width;
-                const nodeColor = "lightblue";
-
-                return (
-                  <React.Fragment
-                    key={`group-${node.user_key}-${node.x}-${node.y}`}
-                  >
-                    <Circle
-                      key={`node-circle-${node.user_key}`}
-                      cx={node.x}
-                      cy={node.y}
-                      r={RADIUS}
-                      color={nodeColor}
-                    />
-                    <SkText
-                      key={`node-text-${node.user_key}`}
-                      x={node.x - width / 2}
-                      y={node.y + RADIUS + 16}
-                      text={node.label}
-                      font={font}
-                    />
-                  </React.Fragment>
-                );
-              })}
-            </Group>
-          </Canvas>
-        </View>
-      </GestureDetector>
-    );
-  };
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView className="bg-neutral-100 h-full">
-        <View className="flex-1">{renderGraph(graph)}</View>
-      </SafeAreaView>
-    </GestureHandlerRootView>
+    <SafeAreaView className="bg-neutral-100 flex-1" edges={["top"]}>
+      <GLView
+        className="w-full h-full"
+        enableExperimentalWorkletSupport
+        onContextCreate={onContextCreate}
+        key={key}
+      />
+    </SafeAreaView>
   );
 }
