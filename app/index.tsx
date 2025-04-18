@@ -2,14 +2,34 @@ import { storage } from "@/utils/storage";
 import { useRouter } from "expo-router";
 import { View, Text, TouchableHighlight } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { jwtDecode } from "jwt-decode";
+
+interface DecodedToken {
+  exp: number;
+}
 
 export default function Index() {
   const router = useRouter();
 
   const signIn = () => {
     const token = storage.getString("auth_token");
-    if (token !== undefined) {
-      router.push("/(auth)/add-contacts");
+
+    if (token) {
+      try {
+        const decodedToken = jwtDecode<DecodedToken>(token);
+        const currentTime = Date.now() / 1000;
+
+        if (decodedToken.exp < currentTime) {
+          storage.delete("auth_token");
+          router.push("/(auth)/sign-in");
+        } else {
+          router.push("/(auth)/add-contacts");
+        }
+      } catch (error) {
+        console.error("Failed to decode token:", error);
+        storage.delete("auth_token");
+        router.push("/(auth)/sign-in");
+      }
     } else {
       router.push("/(auth)/sign-in");
     }
