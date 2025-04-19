@@ -56,15 +56,22 @@ function run(gl: ExpoWebGLRenderingContext) {
   gl.shaderSource(
     vert,
     `
+    #version 300 es
     precision mediump float;
 
-    attribute vec2 a_position;
+    layout (location = 0) in vec2 a_position;
+    layout (location = 1) in vec2 a_offset;
+    layout (location = 2) in vec3 a_color;
+
+    out vec3 v_color;
 
     uniform mat4 u_projection;
     uniform mat4 u_view;
 
     void main(void) {
-      gl_Position = u_projection * u_view * vec4(a_position, 0.0, 1.0);
+      vec2 position = a_position + a_offset;
+      gl_Position = u_projection * u_view * vec4(position, 0.0, 1.0);
+      v_color = a_color;
     }
     `,
   );
@@ -86,8 +93,15 @@ function run(gl: ExpoWebGLRenderingContext) {
   gl.shaderSource(
     frag,
     `
+    #version 300 es
+    precision mediump float;
+
+    in vec3 v_color;
+
+    layout (location = 0) out vec4 outColor;
+
     void main(void) {
-      gl_FragColor = vec4(0.188, 0.871, 0.718, 1.0);
+      outColor = vec4(v_color, 1.0);
     }
     `,
   );
@@ -137,8 +151,38 @@ function run(gl: ExpoWebGLRenderingContext) {
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
+  const instance_data = [];
+  for (let i = 0; i < 100; i++) {
+    const radius = Math.random() * 10 + 1;
+    const angle = Math.random() * 2 * Math.PI;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    instance_data.push(x, y);
+    const r = Math.random();
+    const g = Math.random();
+    const b = Math.random();
+    instance_data.push(r, g, b);
+  }
+
+  const instance_vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, instance_vbo);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array(instance_data),
+    gl.STATIC_DRAW,
+  );
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 5 * 4, 0);
+  gl.vertexAttribDivisor(1, 1);
+
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 5 * 4, 2 * 4);
+  gl.vertexAttribDivisor(2, 1);
+
+  const zoom = 10;
+
   const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
-  const projection = ortho(-1, 1, -1 / aspect, 1 / aspect);
+  const projection = ortho(-zoom, zoom, -zoom / aspect, zoom / aspect);
 
   const projectionLocation = gl.getUniformLocation(program, "u_projection");
   const viewLocation = gl.getUniformLocation(program, "u_view");
@@ -149,7 +193,7 @@ function run(gl: ExpoWebGLRenderingContext) {
   const render = (time_ms: number) => {
     const time = time_ms / 1000;
 
-    camera.x = Math.sin(time);
+    camera.x = Math.sin(time) * 5;
 
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -157,7 +201,7 @@ function run(gl: ExpoWebGLRenderingContext) {
     gl.uniformMatrix4fv(viewLocation, false, view);
 
     gl.bindVertexArray(vao);
-    gl.drawArrays(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2);
+    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, 100);
 
     gl.flush();
     gl.endFrameEXP();
