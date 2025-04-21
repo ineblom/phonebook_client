@@ -1,4 +1,9 @@
-import { View, Text } from "react-native";
+import { View, Text, type LayoutChangeEvent } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
@@ -6,7 +11,11 @@ import {
   getWorkletContext,
   GLView,
 } from "expo-gl";
-import { runOnUI } from "react-native-reanimated";
+import {
+  runOnUI,
+  type SharedValue,
+  useSharedValue,
+} from "react-native-reanimated";
 
 interface Node {
   x: number;
@@ -25,6 +34,13 @@ interface Graph {
   edges: Edge[];
 }
 
+interface Camera {
+  x: SharedValue<number>;
+  y: SharedValue<number>;
+}
+
+const INITIAL_ZOOM_LEVEL = 1.0;
+
 function ortho(left: number, right: number, bottom: number, top: number) {
   "worklet";
   // biome-ignore format: matrix
@@ -42,7 +58,11 @@ function translate(x: number, y: number) {
   return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, 0, 1]);
 }
 
-function run(gl: ExpoWebGLRenderingContext) {
+function run(
+  gl: ExpoWebGLRenderingContext,
+  camera: Camera,
+  zoom: SharedValue<number>,
+) {
   "worklet";
 
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -179,26 +199,28 @@ function run(gl: ExpoWebGLRenderingContext) {
   gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 5 * 4, 2 * 4);
   gl.vertexAttribDivisor(2, 1);
 
-  const zoom = 10;
-
   const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
-  const projection = ortho(-zoom, zoom, -zoom / aspect, zoom / aspect);
 
   const projectionLocation = gl.getUniformLocation(program, "u_projection");
   const viewLocation = gl.getUniformLocation(program, "u_view");
-  gl.uniformMatrix4fv(projectionLocation, false, projection);
-
-  const camera = { x: 0, y: 0 };
 
   const render = (time_ms: number) => {
+    "worklet";
     const time = time_ms / 1000;
-
-    camera.x = Math.sin(time) * 5;
 
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    const view = translate(-camera.x, -camera.y);
+    const view = translate(-camera.x.value, -camera.y.value);
     gl.uniformMatrix4fv(viewLocation, false, view);
+
+    const viewSize = 1 / zoom.value;
+    const projection = ortho(
+      -viewSize,
+      viewSize,
+      -viewSize / aspect,
+      viewSize / aspect,
+    );
+    gl.uniformMatrix4fv(projectionLocation, false, projection);
 
     gl.bindVertexArray(vao);
     gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, 100);
@@ -211,32 +233,109 @@ function run(gl: ExpoWebGLRenderingContext) {
   render(0);
 }
 
-function onContextCreate(gl: ExpoWebGLRenderingContext) {
-  runOnUI((contextId: number) => {
+function onContextCreate(
+  gl: ExpoWebGLRenderingContext,
+  camera: Camera,
+  zoom: SharedValue<number>,
+) {
+  runOnUI((contextId: number, cam: Camera, z: SharedValue<number>) => {
     "worklet";
-    const gl = getWorkletContext(contextId);
-    if (!gl) {
+    const glWorklet = getWorkletContext(contextId);
+    if (!glWorklet) {
       console.error("Failed to get context");
       return;
     }
-    run(gl);
-  })(gl.contextId);
+    run(glWorklet, cam, z);
+  })(gl.contextId, camera, zoom);
 }
 
 export default function Home() {
   const [key, setKey] = useState<number>(0);
+  const [layoutDims, setLayoutDims] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+
   useEffect(() => {
     setKey((prevKey) => prevKey + 1);
   }, []);
 
+  const camera = { x: useSharedValue(0), y: useSharedValue(0) };
+  const zoom = useSharedValue(INITIAL_ZOOM_LEVEL);
+  const pixelToWorldScale = useSharedValue(1);
+  const pinchStartZoom = useSharedValue(zoom.value);
+
+  // Add shared values to store pinch start state for focal zoom
+  const pinchStartCameraX = useSharedValue(0);
+  const pinchStartCameraY = useSharedValue(0);
+  const pinchStartScale = useSharedValue(1);
+  const pinchStartFocalX = useSharedValue(0);
+  const pinchStartFocalY = useSharedValue(0);
+
+  useEffect(() => {
+    if (layoutDims && layoutDims.width > 0) {
+      const viewSize = 1 / zoom.value;
+      const scale = (2 * viewSize) / layoutDims.width;
+      pixelToWorldScale.value = scale;
+    }
+  }, [layoutDims, pixelToWorldScale, zoom]);
+
+  const panGesture = Gesture.Pan().onChange((event) => {
+    "worklet";
+    const { changeX, changeY } = event;
+    camera.x.value -= changeX * pixelToWorldScale.value;
+    camera.y.value += changeY * pixelToWorldScale.value;
+  });
+
+  const zoomGesture = Gesture.Pinch()
+    .onBegin((e) => {
+      "worklet";
+      pinchStartZoom.value = zoom.value;
+      pinchStartCameraX.value = camera.x.value;
+      pinchStartCameraY.value = camera.y.value;
+      pinchStartScale.value = pixelToWorldScale.value;
+      pinchStartFocalX.value = e.focalX;
+      pinchStartFocalY.value = e.focalY;
+    })
+    .onChange((e) => {
+      "worklet";
+      const newZoom = pinchStartZoom.value * e.scale;
+      zoom.value = newZoom;
+      if (layoutDims && layoutDims.width > 0) {
+        const dx = pinchStartFocalX.value - layoutDims.width / 2;
+        const dy = pinchStartFocalY.value - layoutDims.height / 2;
+        const pivotX = pinchStartCameraX.value + dx * pinchStartScale.value;
+        const pivotY = pinchStartCameraY.value - dy * pinchStartScale.value;
+        const viewSize = 1 / newZoom;
+        const newScale = (2 * viewSize) / layoutDims.width;
+        pixelToWorldScale.value = newScale;
+        camera.x.value = pivotX - dx * newScale;
+        camera.y.value = pivotY + dy * newScale;
+      }
+    });
+
+  const gesture = Gesture.Race(panGesture, zoomGesture);
+
+  function handleLayout(event: LayoutChangeEvent) {
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setLayoutDims({ width, height });
+    }
+  }
+
   return (
     <SafeAreaView className="bg-neutral-100 flex-1" edges={["top"]}>
-      <GLView
-        className="w-full h-full"
-        enableExperimentalWorkletSupport
-        onContextCreate={onContextCreate}
-        key={key}
-      />
+      <GestureHandlerRootView className="flex-1">
+        <GestureDetector gesture={gesture}>
+          <GLView
+            onLayout={handleLayout}
+            className="w-full h-full"
+            enableExperimentalWorkletSupport
+            onContextCreate={(gl) => onContextCreate(gl, camera, zoom)}
+            key={key}
+          />
+        </GestureDetector>
+      </GestureHandlerRootView>
     </SafeAreaView>
   );
 }
