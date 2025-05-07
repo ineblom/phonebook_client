@@ -12,7 +12,7 @@ import * as Contacts from "expo-contacts";
 import { useEffect, useState, useCallback } from "react";
 import { api_addContacts, type ContactData } from "@/api/requests";
 import { useRouter } from "expo-router";
-import LoadingWrapper from "@/components/LoadingWrapper";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 
 export default function AddContacts() {
   const router = useRouter();
@@ -232,11 +232,7 @@ export default function AddContacts() {
         </Text>
 
         {error && renderError()}
-        <LoadingWrapper
-          isLoading={isLoading}
-          showSpinner={true}
-          spinnerColor="#0091ff"
-        >
+        <LoadingWrapper isLoading={isLoading}>
           {renderContent()}
         </LoadingWrapper>
       </View>

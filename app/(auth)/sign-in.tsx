@@ -71,7 +71,7 @@ export default function SignIn() {
     }
 
     await storage.set("auth_token", response.token);
-    router.replace("/(auth)/add-contacts");
+    router.push("/(auth)/add-contacts");
 
     setErrorMessage("");
     setLoading(false);

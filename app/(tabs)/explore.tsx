@@ -15,6 +15,7 @@ import {
   runOnUI,
   type SharedValue,
   useSharedValue,
+  runOnJS,
 } from "react-native-reanimated";
 
 interface Node {
@@ -39,7 +40,7 @@ interface Camera {
   y: SharedValue<number>;
 }
 
-const INITIAL_ZOOM_LEVEL = 1.0;
+const INITIAL_ZOOM_LEVEL = 0.5;
 
 function ortho(left: number, right: number, bottom: number, top: number) {
   "worklet";
@@ -64,6 +65,11 @@ function run(
   zoom: SharedValue<number>,
 ) {
   "worklet";
+  
+  // Ensure zoom is initialized to the correct value
+  if (zoom.value === 1.0) {
+    zoom.value = INITIAL_ZOOM_LEVEL;
+  }
 
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clearColor(0.96, 0.96, 0.96, 1);
@@ -172,17 +178,9 @@ function run(
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
   const instance_data = [];
-  for (let i = 0; i < 100; i++) {
-    const radius = Math.random() * 10 + 1;
-    const angle = Math.random() * 2 * Math.PI;
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
-    instance_data.push(x, y);
-    const r = Math.random();
-    const g = Math.random();
-    const b = Math.random();
-    instance_data.push(r, g, b);
-  }
+  const num_instances = 1;
+  instance_data.push(0, 0);
+  instance_data.push(0.1, 0.3, 0.9);
 
   const instance_vbo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, instance_vbo);
@@ -223,7 +221,7 @@ function run(
     gl.uniformMatrix4fv(projectionLocation, false, projection);
 
     gl.bindVertexArray(vao);
-    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, 100);
+    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, num_instances);
 
     gl.flush();
     gl.endFrameEXP();
@@ -263,14 +261,13 @@ export default function Home() {
   const camera = { x: useSharedValue(0), y: useSharedValue(0) };
   const zoom = useSharedValue(INITIAL_ZOOM_LEVEL);
   const pixelToWorldScale = useSharedValue(1);
-  const pinchStartZoom = useSharedValue(zoom.value);
 
-  // Add shared values to store pinch start state for focal zoom
-  const pinchStartCameraX = useSharedValue(0);
-  const pinchStartCameraY = useSharedValue(0);
-  const pinchStartScale = useSharedValue(1);
-  const pinchStartFocalX = useSharedValue(0);
-  const pinchStartFocalY = useSharedValue(0);
+  useEffect(() => {
+    runOnUI(() => {
+      "worklet";
+      zoom.value = INITIAL_ZOOM_LEVEL;
+    })();
+  }, []);
 
   useEffect(() => {
     if (layoutDims && layoutDims.width > 0) {
@@ -287,34 +284,19 @@ export default function Home() {
     camera.y.value += changeY * pixelToWorldScale.value;
   });
 
-  const zoomGesture = Gesture.Pinch()
-    .onBegin((e) => {
+  const pinchGesture = Gesture.Pinch()
+    .onChange((event) => {
       "worklet";
-      pinchStartZoom.value = zoom.value;
-      pinchStartCameraX.value = camera.x.value;
-      pinchStartCameraY.value = camera.y.value;
-      pinchStartScale.value = pixelToWorldScale.value;
-      pinchStartFocalX.value = e.focalX;
-      pinchStartFocalY.value = e.focalY;
-    })
-    .onChange((e) => {
-      "worklet";
-      const newZoom = pinchStartZoom.value * e.scale;
-      zoom.value = newZoom;
+      zoom.value = Math.max(0.1, zoom.value * event.scaleChange);
+      
       if (layoutDims && layoutDims.width > 0) {
-        const dx = pinchStartFocalX.value - layoutDims.width / 2;
-        const dy = pinchStartFocalY.value - layoutDims.height / 2;
-        const pivotX = pinchStartCameraX.value + dx * pinchStartScale.value;
-        const pivotY = pinchStartCameraY.value - dy * pinchStartScale.value;
-        const viewSize = 1 / newZoom;
-        const newScale = (2 * viewSize) / layoutDims.width;
-        pixelToWorldScale.value = newScale;
-        camera.x.value = pivotX - dx * newScale;
-        camera.y.value = pivotY + dy * newScale;
+        const viewSize = 1 / zoom.value;
+        const scale = (2 * viewSize) / layoutDims.width;
+        pixelToWorldScale.value = scale;
       }
     });
 
-  const gesture = Gesture.Race(panGesture, zoomGesture);
+  const gesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
   function handleLayout(event: LayoutChangeEvent) {
     const { width, height } = event.nativeEvent.layout;

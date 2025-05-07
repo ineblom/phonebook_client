@@ -5,70 +5,31 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 interface LoadingWrapperProps {
   children: ReactNode;
   isLoading: boolean;
-  showSpinner?: boolean;
-  spinnerSize?: "small" | "large";
-  spinnerColor?: string;
+  size?: "small" | "large";
+  color?: string;
 }
 
-/**
- * A wrapper component that handles loading states
- * When loading, it disables interactions and applies opacity to children
- * Optionally shows a spinner overlay
- */
-export default function LoadingWrapper({
+export function LoadingWrapper({
   children,
   isLoading,
-  showSpinner = false,
-  spinnerSize = "small",
-  spinnerColor = "#0091ff",
+  size = "large",
+  color = "#0000ff",
 }: LoadingWrapperProps) {
-  if (!isLoading) {
-    return <>{children}</>;
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size={size} color={color} />
+      </View>
+    );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* Render children with reduced opacity */}
-      <View style={styles.contentWrapper}>{children}</View>
-
-      {/* Optional loading spinner overlay */}
-      {showSpinner && (
-        <View style={styles.spinnerOverlay}>
-          <ActivityIndicator size={spinnerSize} color={spinnerColor} />
-        </View>
-      )}
-
-      {/* Invisible touch blocker when loading */}
-      <View style={styles.touchBlocker} />
-    </View>
-  );
+  return <>{children}</>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: "relative",
+  loadingContainer: {
     flex: 1,
-  },
-  contentWrapper: {
-    opacity: 0.6,
-  },
-  spinnerOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
   },
-  touchBlocker: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "transparent",
-    zIndex: 5,
-  },
-}); 
+});
