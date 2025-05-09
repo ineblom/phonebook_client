@@ -59,29 +59,71 @@ function translate(x: number, y: number) {
   return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, 0, 1]);
 }
 
+function create_shader_program(gl: ExpoWebGLRenderingContext, vert: string, frag: string): WebGLProgram | null {
+  "worklet";
+  const vert_shader = gl.createShader(gl.VERTEX_SHADER);
+  if (!vert_shader) {
+    console.error("Failed to create vertex shader");
+    return null;
+  }
+  gl.shaderSource(
+    vert_shader,
+    vert,
+  );
+  gl.compileShader(vert_shader);
+
+  if (!gl.getShaderParameter(vert_shader, gl.COMPILE_STATUS)) {
+    console.error(
+      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(vert_shader)}`,
+    );
+    gl.deleteShader(vert_shader);
+    return null;
+  }
+
+  const frag_shader = gl.createShader(gl.FRAGMENT_SHADER);
+  if (!frag_shader) {
+    console.error("Failed to create fragment shader");
+    return null;
+  }
+  gl.shaderSource(
+    frag_shader,
+    frag,
+  );
+  gl.compileShader(frag_shader);
+
+  if (!gl.getShaderParameter(frag_shader, gl.COMPILE_STATUS)) {
+    console.error(
+      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(frag_shader)}`,
+    );
+    gl.deleteShader(frag_shader);
+    return null;
+  }
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vert_shader);
+  gl.attachShader(program, frag_shader);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(
+      `Unable to initialize the shader program: ${gl.getProgramInfoLog(program)}`,
+    );
+    gl.deleteProgram(program);
+    return null;
+  }
+
+  gl.useProgram(program);
+
+  return program;
+}
+
 function run(
   gl: ExpoWebGLRenderingContext,
   camera: Camera,
   zoom: SharedValue<number>,
 ) {
   "worklet";
-  
-  // Ensure zoom is initialized to the correct value
-  if (zoom.value === 1.0) {
-    zoom.value = INITIAL_ZOOM_LEVEL;
-  }
-
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-  gl.clearColor(0.96, 0.96, 0.96, 1);
-
-  const vert = gl.createShader(gl.VERTEX_SHADER);
-  if (!vert) {
-    console.error("Failed to create vertex shader");
-    return;
-  }
-  gl.shaderSource(
-    vert,
-    `
+  const vert = `
     #version 300 es
     precision mediump float;
 
@@ -99,26 +141,8 @@ function run(
       gl_Position = u_projection * u_view * vec4(position, 0.0, 1.0);
       v_color = a_color;
     }
-    `,
-  );
-  gl.compileShader(vert);
-
-  if (!gl.getShaderParameter(vert, gl.COMPILE_STATUS)) {
-    console.error(
-      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(vert)}`,
-    );
-    gl.deleteShader(vert);
-    return;
-  }
-
-  const frag = gl.createShader(gl.FRAGMENT_SHADER);
-  if (!frag) {
-    console.error("Failed to create fragment shader");
-    return;
-  }
-  gl.shaderSource(
-    frag,
     `
+  const frag = `
     #version 300 es
     precision mediump float;
 
@@ -129,35 +153,24 @@ function run(
     void main(void) {
       outColor = vec4(v_color, 1.0);
     }
-    `,
-  );
-  gl.compileShader(frag);
-
-  if (!gl.getShaderParameter(frag, gl.COMPILE_STATUS)) {
-    console.error(
-      `An error occurred compiling the shaders: ${gl.getShaderInfoLog(frag)}`,
-    );
-    gl.deleteShader(frag);
+    `;
+  const program = create_shader_program(gl, vert, frag);
+  if (!program) {
+    console.error("Failed to create shader program");
     return;
   }
-
-  const program = gl.createProgram();
-  gl.attachShader(program, vert);
-  gl.attachShader(program, frag);
-  gl.linkProgram(program);
-
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error(
-      `Unable to initialize the shader program: ${gl.getProgramInfoLog(program)}`,
-    );
-    gl.deleteProgram(program);
-    return;
+  
+  // Ensure zoom is initialized to the correct value
+  if (zoom.value === 1.0) {
+    zoom.value = INITIAL_ZOOM_LEVEL;
   }
 
-  gl.useProgram(program);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clearColor(0.96, 0.96, 0.96, 1);
 
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
+
+  const circles_vao = gl.createVertexArray();
+  gl.bindVertexArray(circles_vao);
 
   const circle_vertices = [];
   for (let i = 0; i < 360; i += 5) {
@@ -167,8 +180,8 @@ function run(
     circle_vertices.push(x, y);
   }
 
-  const vbo = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  const circles_vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, circles_vbo);
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array(circle_vertices),
@@ -177,16 +190,16 @@ function run(
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  const instance_data = [];
-  const num_instances = 1;
-  instance_data.push(0, 0);
-  instance_data.push(0.1, 0.3, 0.9);
+  const circles_data = [];
+  const num_circles = 1;
+  circles_data.push(0, 0);
+  circles_data.push(0.1, 0.5, 0.9);
 
-  const instance_vbo = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, instance_vbo);
+  const circles_instances_bo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, circles_instances_bo);
   gl.bufferData(
     gl.ARRAY_BUFFER,
-    new Float32Array(instance_data),
+    new Float32Array(circles_data),
     gl.STATIC_DRAW,
   );
   gl.enableVertexAttribArray(1);
@@ -213,15 +226,15 @@ function run(
 
     const viewSize = 1 / zoom.value;
     const projection = ortho(
+      -viewSize * aspect,
+      viewSize * aspect,
       -viewSize,
       viewSize,
-      -viewSize / aspect,
-      viewSize / aspect,
     );
     gl.uniformMatrix4fv(projectionLocation, false, projection);
 
-    gl.bindVertexArray(vao);
-    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, num_instances);
+    gl.bindVertexArray(circles_vao);
+    gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, num_circles);
 
     gl.flush();
     gl.endFrameEXP();
@@ -272,8 +285,7 @@ export default function Home() {
   useEffect(() => {
     if (layoutDims && layoutDims.width > 0) {
       const viewSize = 1 / zoom.value;
-      const scale = (2 * viewSize) / layoutDims.width;
-      pixelToWorldScale.value = scale;
+      pixelToWorldScale.value = viewSize / layoutDims.width;
     }
   }, [layoutDims, pixelToWorldScale, zoom]);
 
@@ -291,8 +303,7 @@ export default function Home() {
       
       if (layoutDims && layoutDims.width > 0) {
         const viewSize = 1 / zoom.value;
-        const scale = (2 * viewSize) / layoutDims.width;
-        pixelToWorldScale.value = scale;
+        pixelToWorldScale.value = viewSize / layoutDims.width;
       }
     });
 
@@ -300,6 +311,7 @@ export default function Home() {
 
   function handleLayout(event: LayoutChangeEvent) {
     const { width, height } = event.nativeEvent.layout;
+    console.log("width", width);
     if (width > 0 && height > 0) {
       setLayoutDims({ width, height });
     }
