@@ -2,9 +2,9 @@ import {
   api_cancelVerification,
   api_requestVerification,
   api_verify,
-} from "@/api/requests";
+} from "@/lib/requests";
 import FormField from "@/components/FormField";
-import LoadingWrapper from "@/components/LoadingWrapper";
+import { LoadingWrapper } from "@/components/LoadingWrapper";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link, useRouter } from "expo-router";
 import React from "react";
@@ -17,7 +17,7 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { storage } from "@/utils/storage";
+import { storage } from "@/lib/storage";
 
 export default function SignIn() {
   const router = useRouter();
@@ -184,7 +184,7 @@ export default function SignIn() {
         </Text>
 
         {renderErrorMessage()}
-        <LoadingWrapper isLoading={loading} showSpinner={true}>
+        <LoadingWrapper isLoading={loading}>
           {renderContent()}
         </LoadingWrapper>
       </View>

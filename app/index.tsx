@@ -1,4 +1,4 @@
-import { storage } from "@/utils/storage";
+import { storage } from "@/lib/storage";
 import { useRouter } from "expo-router";
 import { View, Text, TouchableHighlight } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

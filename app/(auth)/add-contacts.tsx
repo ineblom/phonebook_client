@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Contacts from "expo-contacts";
 import { useEffect, useState, useCallback } from "react";
-import { api_addContacts, type ContactData } from "@/api/requests";
+import { api_addContacts, type ContactData } from "@/lib/requests";
 import { useRouter } from "expo-router";
 import { LoadingWrapper } from "@/components/LoadingWrapper";
 

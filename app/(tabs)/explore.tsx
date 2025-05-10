@@ -123,7 +123,7 @@ function run(
   zoom: SharedValue<number>,
 ) {
   "worklet";
-  const vert = `
+  const circles_vert = `
     #version 300 es
     precision mediump float;
 
@@ -142,7 +142,7 @@ function run(
       v_color = a_color;
     }
     `
-  const frag = `
+  const circles_frag = `
     #version 300 es
     precision mediump float;
 
@@ -154,13 +154,12 @@ function run(
       outColor = vec4(v_color, 1.0);
     }
     `;
-  const program = create_shader_program(gl, vert, frag);
-  if (!program) {
+  const circles_program = create_shader_program(gl, circles_vert, circles_frag);
+  if (!circles_program) {
     console.error("Failed to create shader program");
     return;
   }
   
-  // Ensure zoom is initialized to the correct value
   if (zoom.value === 1.0) {
     zoom.value = INITIAL_ZOOM_LEVEL;
   }
@@ -168,7 +167,7 @@ function run(
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clearColor(0.96, 0.96, 0.96, 1);
 
-
+  // Circles
   const circles_vao = gl.createVertexArray();
   gl.bindVertexArray(circles_vao);
 
@@ -212,8 +211,81 @@ function run(
 
   const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
 
-  const projectionLocation = gl.getUniformLocation(program, "u_projection");
-  const viewLocation = gl.getUniformLocation(program, "u_view");
+  gl.useProgram(circles_program);
+  const circles_projectionLocation = gl.getUniformLocation(circles_program, "u_projection");
+  const circles_viewLocation = gl.getUniformLocation(circles_program, "u_view");
+
+  // Lines
+  const lines_vert = `
+    #version 300 es
+    precision mediump float;
+
+    layout (location = 0) in vec2 a_position;
+    layout (location = 1) in vec2 a_start;
+    layout (location = 2) in vec2 a_end;
+
+    uniform mat4 u_projection;
+    uniform mat4 u_view;
+
+    void main(void) {
+      float width = 0.05;
+
+      vec2 x_basis = a_end - a_start;
+      vec2 y_basis = normalize(vec2(-x_basis.y, x_basis.x));
+      vec2 point = a_start + x_basis * a_position.x + y_basis * width * a_position.y;
+      gl_Position = u_projection * u_view * vec4(point, 0.0, 1.0);
+    }
+    `;
+  const lines_frag = `
+    #version 300 es
+    precision mediump float;
+    
+    layout (location = 0) out vec4 outColor;
+
+    void main(void) {
+      outColor = vec4(1.0, 0.0, 0.0, 1.0);
+    }
+    `;
+  
+  const lines_program = create_shader_program(gl, lines_vert, lines_frag);
+  if (!lines_program) {
+    console.error("Failed to create shader program");
+    return;
+  }
+
+  const lines_vao = gl.createVertexArray();
+  gl.bindVertexArray(lines_vao);
+
+  const lines_vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, lines_vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    0, -0.5,  // bottom left
+    0,  0.5,  // top left
+    1, -0.5,  // bottom right
+    1,  0.5   // top right
+  ]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  const lines_data = [];
+  const num_lines = 1;
+  lines_data.push(0, 0);
+  lines_data.push(1, 1);
+
+  const lines_instances_bo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, lines_instances_bo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines_data), gl.STATIC_DRAW);
+
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(1, 1);
+
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 2 * 4);
+  gl.vertexAttribDivisor(2, 1);
+
+  const lines_projectionLocation = gl.getUniformLocation(lines_program, "u_projection");
+  const lines_viewLocation = gl.getUniformLocation(lines_program, "u_view");
 
   const render = (time_ms: number) => {
     "worklet";
@@ -222,8 +294,6 @@ function run(
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     const view = translate(-camera.x.value, -camera.y.value);
-    gl.uniformMatrix4fv(viewLocation, false, view);
-
     const viewSize = 1 / zoom.value;
     const projection = ortho(
       -viewSize * aspect,
@@ -231,10 +301,18 @@ function run(
       -viewSize,
       viewSize,
     );
-    gl.uniformMatrix4fv(projectionLocation, false, projection);
 
+    gl.useProgram(circles_program);
     gl.bindVertexArray(circles_vao);
+    gl.uniformMatrix4fv(circles_viewLocation, false, view);
+    gl.uniformMatrix4fv(circles_projectionLocation, false, projection);
     gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, circle_vertices.length / 2, num_circles);
+
+    gl.useProgram(lines_program);
+    gl.bindVertexArray(lines_vao);
+    gl.uniformMatrix4fv(lines_viewLocation, false, view);
+    gl.uniformMatrix4fv(lines_projectionLocation, false, projection);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, num_lines);
 
     gl.flush();
     gl.endFrameEXP();
@@ -311,7 +389,6 @@ export default function Home() {
 
   function handleLayout(event: LayoutChangeEvent) {
     const { width, height } = event.nativeEvent.layout;
-    console.log("width", width);
     if (width > 0 && height > 0) {
       setLayoutDims({ width, height });
     }
