@@ -17,7 +17,7 @@ import {
   useSharedValue,
   runOnJS,
 } from "react-native-reanimated";
-import { init_renderer, ortho, renderer_render, translate } from "@/lib/renderer";
+import { init_renderer, ortho, push_circle, renderer_render, translate } from "@/lib/renderer";
 
 interface Node {
   x: number;
@@ -64,7 +64,9 @@ function run(
     "worklet";
     const time = time_ms / 1000;
 
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    push_circle(renderer, 0, 0, 1, 0, 0);
+    push_circle(renderer, 1.5, 0, 0, 1, 0);
+    push_circle(renderer, 0, 1.5, 0, 0, 1);
 
     const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
     const view = translate(-camera.x.value, -camera.y.value);

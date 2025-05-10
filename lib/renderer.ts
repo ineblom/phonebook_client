@@ -2,6 +2,9 @@ import { ExpoWebGLRenderingContext } from "expo-gl";
 
 const NUM_CIRCLE_VERTICES = 36;
 
+const MAX_NUM_CIRCLES = 128;
+const MAX_NUM_LINES = 128;
+
 export interface Renderer {
   circles_program: WebGLProgram;
   circles_projectionLocation: WebGLUniformLocation;
@@ -10,12 +13,18 @@ export interface Renderer {
   circles_vbo: WebGLBuffer;
   circles_instances_bo: WebGLBuffer;
 
+  num_circles: number;
+  circles_data: Float32Array;
+
   lines_program: WebGLProgram;
   lines_projectionLocation: WebGLUniformLocation;
   lines_viewLocation: WebGLUniformLocation;
   lines_vao: WebGLVertexArrayObject;
   lines_vbo: WebGLBuffer;
   lines_instances_bo: WebGLBuffer;
+
+  num_lines: number;
+  lines_data: Float32Array;
 }
 
 export function ortho(left: number, right: number, bottom: number, top: number) {
@@ -133,7 +142,6 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
     return null;
   }
   
-
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clearColor(0.96, 0.96, 0.96, 1);
 
@@ -159,18 +167,9 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  const circles_data = [];
-  const num_circles = 1;
-  circles_data.push(0, 0);
-  circles_data.push(0.1, 0.5, 0.9);
-
   const circles_instances_bo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, circles_instances_bo);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array(circles_data),
-    gl.STATIC_DRAW,
-  );
+  gl.bufferData(gl.ARRAY_BUFFER, MAX_NUM_CIRCLES * 5 * 4, gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(1);
   gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 5 * 4, 0);
   gl.vertexAttribDivisor(1, 1);
@@ -243,14 +242,9 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  const lines_data = [];
-  const num_lines = 1;
-  lines_data.push(0, 0);
-  lines_data.push(1, 1);
-
   const lines_instances_bo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, lines_instances_bo);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines_data), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, MAX_NUM_LINES * 4 * 4, gl.DYNAMIC_DRAW);
 
   gl.enableVertexAttribArray(1);
   gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
@@ -278,30 +272,66 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
     circles_vbo,
     circles_instances_bo,
 
+    num_circles: 0,
+    circles_data: new Float32Array(MAX_NUM_CIRCLES * 5),
+
     lines_program,
     lines_projectionLocation,
     lines_viewLocation,
     lines_vao,
     lines_vbo,
     lines_instances_bo,
+
+    num_lines: 0,
+    lines_data: new Float32Array(MAX_NUM_LINES * 4),
   }
+}
+
+export function push_circle(renderer: Renderer, x: number, y: number, r: number, g: number, b: number) {
+  "worklet";
+  const i = renderer.num_circles * 5;
+  renderer.circles_data[i + 0] = x;
+  renderer.circles_data[i + 1] = y;
+  renderer.circles_data[i + 2] = r;
+  renderer.circles_data[i + 3] = g;
+  renderer.circles_data[i + 4] = b;
+  renderer.num_circles++;
+}
+
+export function push_line(renderer: Renderer, x1: number, y1: number, x2: number, y2: number) {
+  "worklet";
+  const i = renderer.num_lines * 4;
+  renderer.lines_data[i + 0] = x1;
+  renderer.lines_data[i + 1] = y1;
+  renderer.lines_data[i + 2] = x2;
+  renderer.lines_data[i + 3] = y2;
+  renderer.num_lines++;
 }
 
 export function renderer_render(renderer: Renderer, gl: ExpoWebGLRenderingContext, view: Float32Array, projection: Float32Array) {
   "worklet";
 
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.circles_instances_bo);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, renderer.circles_data);
+
   gl.useProgram(renderer.circles_program);
   gl.bindVertexArray(renderer.circles_vao);
   gl.uniformMatrix4fv(renderer.circles_viewLocation, false, view);
   gl.uniformMatrix4fv(renderer.circles_projectionLocation, false, projection);
-  gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, NUM_CIRCLE_VERTICES, 1);
+  gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, NUM_CIRCLE_VERTICES, renderer.num_circles);
 
   gl.useProgram(renderer.lines_program);
   gl.bindVertexArray(renderer.lines_vao);
   gl.uniformMatrix4fv(renderer.lines_viewLocation, false, view);
   gl.uniformMatrix4fv(renderer.lines_projectionLocation, false, projection);
-  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, renderer.num_lines);
 
-    gl.flush();
-    gl.endFrameEXP();
+  renderer.num_lines = 0;
+  renderer.num_circles = 0;
+
+  gl.flush();
+  gl.endFrameEXP();
 }
