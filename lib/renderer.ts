@@ -1,6 +1,6 @@
 import { ExpoWebGLRenderingContext } from "expo-gl";
 
-const NUM_CIRCLE_VERTICES = 36;
+const NUM_CIRCLE_VERTICES = 50;
 
 const MAX_NUM_CIRCLES = 128;
 const MAX_NUM_LINES = 128;
@@ -203,7 +203,7 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
     uniform mat4 u_view;
 
     void main(void) {
-      float width = 0.05;
+      float width = 0.03;
 
       vec2 x_basis = a_end - a_start;
       vec2 y_basis = normalize(vec2(-x_basis.y, x_basis.x));
@@ -218,7 +218,7 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
     layout (location = 0) out vec4 outColor;
 
     void main(void) {
-      outColor = vec4(1.0, 0.0, 0.0, 1.0);
+      outColor = vec4(0.263, 0.729, 0.831, 1.0);
     }
     `;
   
@@ -317,17 +317,21 @@ export function renderer_render(renderer: Renderer, gl: ExpoWebGLRenderingContex
   gl.bindBuffer(gl.ARRAY_BUFFER, renderer.circles_instances_bo);
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, renderer.circles_data);
 
-  gl.useProgram(renderer.circles_program);
-  gl.bindVertexArray(renderer.circles_vao);
-  gl.uniformMatrix4fv(renderer.circles_viewLocation, false, view);
-  gl.uniformMatrix4fv(renderer.circles_projectionLocation, false, projection);
-  gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, NUM_CIRCLE_VERTICES, renderer.num_circles);
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.lines_instances_bo);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, renderer.lines_data);
 
   gl.useProgram(renderer.lines_program);
   gl.bindVertexArray(renderer.lines_vao);
   gl.uniformMatrix4fv(renderer.lines_viewLocation, false, view);
   gl.uniformMatrix4fv(renderer.lines_projectionLocation, false, projection);
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, renderer.num_lines);
+
+  gl.useProgram(renderer.circles_program);
+  gl.bindVertexArray(renderer.circles_vao);
+  gl.uniformMatrix4fv(renderer.circles_viewLocation, false, view);
+  gl.uniformMatrix4fv(renderer.circles_projectionLocation, false, projection);
+  gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, NUM_CIRCLE_VERTICES, renderer.num_circles);
+
 
   renderer.num_lines = 0;
   renderer.num_circles = 0;
