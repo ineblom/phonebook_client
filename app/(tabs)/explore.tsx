@@ -60,12 +60,16 @@ function run(
     zoom.value = INITIAL_ZOOM_LEVEL;
   }
 
+
   const render = (time_ms: number) => {
     "worklet";
     const time = time_ms / 1000;
 
     push_circle(renderer, 0, 0, 0.392, 0.89, 1);
     push_circle(renderer, 4, 0, 0.392, 0.89, 1);
+
+    push_circle(renderer, 0, 2, 0.392, 0.89, 1);
+    push_line(renderer, 0, 0, 0, 2);
 
     push_line(renderer, 0, 0, 4, 0);
 
@@ -109,20 +113,13 @@ export default function Home() {
     height: number;
   } | null>(null);
 
-  useEffect(() => {
+  useEffect(() => { // Ensures the GLView is recreated when code is changed
     setKey((prevKey) => prevKey + 1);
   }, []);
 
   const camera = { x: useSharedValue(0), y: useSharedValue(0) };
   const zoom = useSharedValue(INITIAL_ZOOM_LEVEL);
   const pixelToWorldScale = useSharedValue(1);
-
-  useEffect(() => {
-    runOnUI(() => {
-      "worklet";
-      zoom.value = INITIAL_ZOOM_LEVEL;
-    })();
-  }, []);
 
   useEffect(() => {
     if (layoutDims && layoutDims.width > 0) {

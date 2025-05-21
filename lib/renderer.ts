@@ -247,11 +247,11 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
   gl.bufferData(gl.ARRAY_BUFFER, MAX_NUM_LINES * 4 * 4, gl.DYNAMIC_DRAW);
 
   gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 4 * 4, 0);
   gl.vertexAttribDivisor(1, 1);
 
   gl.enableVertexAttribArray(2);
-  gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 2 * 4);
+  gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 4 * 4, 2 * 4);
   gl.vertexAttribDivisor(2, 1);
 
   const lines_projectionLocation = gl.getUniformLocation(lines_program, "u_projection");
