@@ -1,4 +1,4 @@
-import { View, Text, type LayoutChangeEvent } from "react-native";
+import { type LayoutChangeEvent } from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -15,9 +15,8 @@ import {
   runOnUI,
   type SharedValue,
   useSharedValue,
-  runOnJS,
 } from "react-native-reanimated";
-import { init_renderer, ortho, push_circle, push_line, renderer_render, translate } from "@/lib/renderer";
+import { init_renderer, ortho, push_circle, push_line, push_text, renderer_render, translate } from "@/lib/renderer";
 
 interface Node {
   x: number;
@@ -47,6 +46,7 @@ function run(
   gl: ExpoWebGLRenderingContext,
   camera: Camera,
   zoom: SharedValue<number>,
+  graph: SharedValue<Graph>,
 ) {
   "worklet";
 
@@ -60,18 +60,24 @@ function run(
     zoom.value = INITIAL_ZOOM_LEVEL;
   }
 
-
   const render = (time_ms: number) => {
     "worklet";
     const time = time_ms / 1000;
 
-    push_circle(renderer, 0, 0, 0.392, 0.89, 1);
-    push_circle(renderer, 4, 0, 0.392, 0.89, 1);
+    for (const node of graph.value.nodes) {
+      push_circle(renderer, node.x, node.y, 0.392, 0.89, 1);
+    }
 
-    push_circle(renderer, 0, 2, 0.392, 0.89, 1);
-    push_line(renderer, 0, 0, 0, 2);
+    for (const edge of graph.value.edges) {
+      push_line(renderer,
+        graph.value.nodes[edge.source].x,
+        graph.value.nodes[edge.source].y,
+        graph.value.nodes[edge.target].x,
+        graph.value.nodes[edge.target].y,
+      );
+    }
 
-    push_line(renderer, 0, 0, 4, 0);
+    push_text(renderer, 0, 0, "hejsan");
 
     const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
     const view = translate(-camera.x.value, -camera.y.value);
@@ -94,16 +100,17 @@ function onContextCreate(
   gl: ExpoWebGLRenderingContext,
   camera: Camera,
   zoom: SharedValue<number>,
+  graph: SharedValue<Graph>,
 ) {
-  runOnUI((contextId: number, cam: Camera, z: SharedValue<number>) => {
+  runOnUI((contextId: number, cam: Camera, z: SharedValue<number>, g: SharedValue<Graph>) => {
     "worklet";
     const glWorklet = getWorkletContext(contextId);
     if (!glWorklet) {
       console.error("Failed to get context");
       return;
     }
-    run(glWorklet, cam, z);
-  })(gl.contextId, camera, zoom);
+    run(glWorklet, cam, z, g);
+  })(gl.contextId, camera, zoom, graph);
 }
 
 export default function Home() {
@@ -120,6 +127,44 @@ export default function Home() {
   const camera = { x: useSharedValue(0), y: useSharedValue(0) };
   const zoom = useSharedValue(INITIAL_ZOOM_LEVEL);
   const pixelToWorldScale = useSharedValue(1);
+
+  const initial_graph = {
+    nodes: [
+      {
+        x: 0,
+        y: 0,
+        label: "Node 1",
+        user_key: "node1",
+      },
+      {
+        x: 3,
+        y: 0,
+        label: "Node 2",
+        user_key: "node2",
+      },
+      {
+        x: 1,
+        y: 2,
+        label: "Node 3",
+        user_key: "node3",
+      },
+    ],
+    edges: [
+      {
+        source: 0,
+        target: 1,
+      },
+      {
+        source: 1,
+        target: 2,
+      },
+    ],
+  };
+  const graph = useSharedValue<Graph>(initial_graph);
+
+  useEffect(() => {
+    graph.value = initial_graph;
+  }, []);
 
   useEffect(() => {
     if (layoutDims && layoutDims.width > 0) {
@@ -163,7 +208,7 @@ export default function Home() {
             onLayout={handleLayout}
             className="w-full h-full"
             enableExperimentalWorkletSupport
-            onContextCreate={(gl) => onContextCreate(gl, camera, zoom)}
+            onContextCreate={(gl) => onContextCreate(gl, camera, zoom, graph)}
             key={key}
           />
         </GestureDetector>

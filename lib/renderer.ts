@@ -1,9 +1,16 @@
 import { ExpoWebGLRenderingContext } from "expo-gl";
+import { getCharacterBitmap } from "./character-bitmaps";
 
 const NUM_CIRCLE_VERTICES = 50;
 
 const MAX_NUM_CIRCLES = 128;
 const MAX_NUM_LINES = 128;
+
+interface TextEntry {
+ text: string,
+ x: number,
+ y: number, 
+}
 
 export interface Renderer {
   circles_program: WebGLProgram;
@@ -25,6 +32,13 @@ export interface Renderer {
 
   num_lines: number;
   lines_data: Float32Array;
+
+  text_program: WebGLProgram;
+  text_projectionLocation: WebGLUniformLocation;
+  text_viewLocation: WebGLUniformLocation;
+  character_textures: { [key: string]: WebGLTexture };
+  text_entries: Array<TextEntry>;
+  text_offsetLocation: WebGLUniformLocation;
 }
 
 export function ortho(left: number, right: number, bottom: number, top: number) {
@@ -264,6 +278,92 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
     console.error("Failed to get uniform location");
     return null;
   }
+
+  const character_textures: { [key: string]: WebGLTexture } = {};
+
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ";
+  for (let i = 0; i < characters.length; i++) {
+    const bitmap = getCharacterBitmap(characters[i]);
+    if (!bitmap) continue;
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 8, 8, 0, gl.RED, gl.UNSIGNED_BYTE, bitmap);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    character_textures[characters[i]] = tex;
+  }
+
+  const text_program = create_shader_program(gl, `
+    #version 300 es
+    precision mediump float;
+
+    uniform mat4 u_projection;
+    uniform mat4 u_view;
+    uniform vec2 u_offset;
+
+    out vec2 v_tex_coord;
+
+    void main() {
+      vec2 positions[4] = vec2[4](
+        vec2(-0.5, 0.5), // bottom-left
+        vec2( 0.5, 0.5), // bottom-right
+        vec2(-0.5,-0.5), // top-left
+        vec2( 0.5,-0.5)  // top-right
+      );
+      
+      vec2 tex_coords[4] = vec2[4](
+        vec2(0.0, 0.0), // bottom-left
+        vec2(1.0, 0.0), // bottom-right
+        vec2(0.0, 1.0), // top-left
+        vec2(1.0, 1.0)  // top-right
+      );
+
+      gl_Position = u_projection * u_view * vec4(positions[gl_VertexID] + u_offset, 0.0, 1.0);
+      v_tex_coord = tex_coords[gl_VertexID];
+    }
+    `, `
+    #version 300 es
+    precision mediump float;
+
+    in vec2 v_tex_coord;
+
+    out vec4 out_color;
+
+    uniform sampler2D u_texture;
+
+    void main() {
+      float alpha = texture(u_texture, v_tex_coord).r;
+      out_color = vec4(0.0, 0.0, 0.0, alpha);
+    }
+    `);
+  if (!text_program) {
+    console.error("Failed to create shader program");
+    return null;
+  }
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  gl.useProgram(text_program);
+  const text_projectionLocation = gl.getUniformLocation(text_program, "u_projection");
+  if (!text_projectionLocation) {
+    console.error("Failed to get uniform location");
+    return null;
+  }
+  const text_viewLocation = gl.getUniformLocation(text_program, "u_view");
+  if (!text_viewLocation) {
+    console.error("Failed to get uniform location");
+    return null;
+  }
+  const text_offsetLocation = gl.getUniformLocation(text_program, "u_offset");
+  if (!text_offsetLocation) {
+    console.error("Failed to get uniform location");
+    return null;
+  }
+
   return {
     circles_program,
     circles_projectionLocation,
@@ -284,6 +384,13 @@ export function init_renderer(gl: ExpoWebGLRenderingContext): Renderer | null {
 
     num_lines: 0,
     lines_data: new Float32Array(MAX_NUM_LINES * 4),
+
+    text_program,
+    text_projectionLocation,
+    text_viewLocation,
+    character_textures,
+    text_entries: [],
+    text_offsetLocation,
   }
 }
 
@@ -306,6 +413,16 @@ export function push_line(renderer: Renderer, x1: number, y1: number, x2: number
   renderer.lines_data[i + 2] = x2;
   renderer.lines_data[i + 3] = y2;
   renderer.num_lines++;
+}
+
+export function push_text(renderer: Renderer, x: number, y: number, text: string) {
+  "worklet";
+
+  renderer.text_entries.push({
+    text,
+    x,
+    y,
+  });
 }
 
 export function renderer_render(renderer: Renderer, gl: ExpoWebGLRenderingContext, view: Float32Array, projection: Float32Array) {
@@ -332,6 +449,20 @@ export function renderer_render(renderer: Renderer, gl: ExpoWebGLRenderingContex
   gl.uniformMatrix4fv(renderer.circles_projectionLocation, false, projection);
   gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, NUM_CIRCLE_VERTICES, renderer.num_circles);
 
+  gl.useProgram(renderer.text_program);
+  gl.uniformMatrix4fv(renderer.text_viewLocation, false, view);
+  gl.uniformMatrix4fv(renderer.text_projectionLocation, false, projection);
+  for (let i = 0; i < renderer.text_entries.length; i++) {
+    const entry = renderer.text_entries[i];
+
+    for (let j = 0; j < entry.text.length; j++) {
+      const c = entry.text[j].toUpperCase();
+      gl.uniform2fv(renderer.text_offsetLocation, [entry.x + j * 1.0, entry.y]);
+      gl.bindTexture(gl.TEXTURE_2D, renderer.character_textures[c]);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+  }
+  renderer.text_entries.splice(0);
 
   renderer.num_lines = 0;
   renderer.num_circles = 0;
